@@ -1,0 +1,255 @@
+<html>
+    <head>
+        <script>
+var model = {};
+
+function init(){
+    var canvas = document.getElementById("canvas");
+    var ctx = canvas.getContext("2d");
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    document.addEventListener("click", click);
+
+    buildModel();
+    test();
+    clear();
+    render();
+}
+
+function click(e){
+
+    if(isHit(e, model.clear)){
+        clear();
+    } else {
+        var cell;
+        for(i = 0; i < model.board.length; i++){
+            for(j = 0; j < model.board[i].length; j++){
+                cell = model.board[i][j];
+                if(!cell.value && isHit(e, cell)){
+                    cell.value = "0";
+                    calculate();
+                    return;
+                }
+            }
+        }
+    }
+}
+
+function isHit(e, cell){
+    return (e.x >= cell.x && e.x <= cell.x + cell.w) &&
+            (e.y >= cell.y && e.y <= cell.y + cell.h);
+}
+
+//https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/random
+function getRandomInt(min, max) {
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min)) + min; //The maximum is exclusive and the minimum is inclusive
+}
+
+function calculate(){
+
+    if(!model.winner){
+
+        checkFinished();
+
+        if(!model.winner){
+            while(true){
+                var i = getRandomInt(0, 3);
+                var j = getRandomInt(0, 3);
+                var cell = model.board[i][j];
+                if(!cell.value){
+                    cell.value = "X";
+                    break;
+                }
+            }
+
+            checkFinished();
+        }
+
+        render();
+    }
+}
+
+function checkFinished() {
+    var i, j;
+
+    function sameNotNullHorizontal(i){
+        return model.board[i][0].value === model.board[i][1].value &&
+               model.board[i][1].value === model.board[i][2].value &&
+               model.board[i][0].value;
+    }
+    for(i = 0; i < model.board.length; i++){
+        if(sameNotNullHorizontal(i)){
+            model.winner = model.board[i][0].value;
+        }
+    }
+
+    function sameNotNullVertical(j){
+        return model.board[0][j].value === model.board[1][j].value &&
+               model.board[1][j].value === model.board[2][j].value &&
+               model.board[0][j].value;
+    }
+    for(j = 0; j < model.board.length; j++){
+        if(sameNotNullVertical(j)){
+            model.winner = model.board[0][j].value;
+        }
+    }
+
+    if(model.board[0][0].value &&
+        model.board[0][0].value === model.board[1][1].value &&
+        model.board[1][1].value === model.board[2][2].value
+    ){
+        model.winner = model.board[1][1].value;
+    }
+
+    if(model.board[0][2].value &&
+        model.board[0][2].value === model.board[1][1].value &&
+        model.board[1][1].value === model.board[2][0].value
+    ){
+        model.winner = model.board[1][1].value;
+    }
+}
+
+function test(){
+    model.board[0][0].value = "X";
+    model.board[1][0].value = "X";
+    model.board[2][0].value = "X";
+    checkFinished();
+    assert(model.winner === "X");
+    clear();
+
+    model.board[0][1].value = "X";
+    model.board[1][1].value = "X";
+    model.board[2][1].value = "X";
+    checkFinished();
+    assert(model.winner === "X");
+    clear();
+
+    model.board[0][2].value = "X";
+    model.board[1][2].value = "X";
+    model.board[2][2].value = "X";
+    checkFinished();
+    assert(model.winner === "X");
+    clear();
+
+    model.board[0][0].value = "X";
+    model.board[0][1].value = "X";
+    model.board[0][2].value = "X";
+    checkFinished();
+    assert(model.winner === "X");
+    clear();
+
+    model.board[1][0].value = "X";
+    model.board[1][1].value = "X";
+    model.board[1][2].value = "X";
+    checkFinished();
+    assert(model.winner === "X");
+    clear();
+
+    model.board[2][0].value = "X";
+    model.board[2][1].value = "X";
+    model.board[2][2].value = "X";
+    checkFinished();
+    assert(model.winner === "X");
+    clear();
+
+    model.board[0][0].value = "X";
+    model.board[1][1].value = "X";
+    model.board[2][2].value = "X";
+    checkFinished();
+    assert(model.winner === "X");
+    clear();
+
+    model.board[0][2].value = "X";
+    model.board[1][1].value = "X";
+    model.board[2][0].value = "X";
+    checkFinished();
+    assert(model.winner === "X");
+    clear();
+}
+
+function assert(b, message){
+    if(!b) {
+        var msg = "Failed test";
+        if(message) msg += ": " + message;
+        throw new Error(msg);
+    }
+}
+
+function buildModel(){
+    var i, j;
+    model.board = [];
+    for(i = 0; i < 3; i++){
+        model.board[i] = [];
+        for(j = 0; j < 3; j++){
+            model.board[i][j] = {
+                i: i,
+                j: j,
+                x: 20 * i,
+                y: 20 * j,
+                w: 20,
+                h: 20
+            };
+        }
+    }
+
+    model.clear = {
+        x: 10,
+        y: 100,
+        w: 40,
+        h: 20
+    };
+}
+
+function clear(){
+    for(i = 0; i < model.board.length; i++){
+        for(j = 0; j < model.board[i].length; j++){
+            delete model.board[i][j].value;
+        }
+    }
+    delete model.winner;
+    render();
+}
+
+function render(){
+    var canvas = document.getElementById("canvas");
+    var ctx = canvas.getContext("2d");
+    var i, j, cell, x,y, w, h;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for(i = 0; i < model.board.length; i++){
+        for(j = 0; j < model.board[i].length; j++){
+            cell = model.board[i][j];
+            ctx.strokeRect(cell.x, cell.y, cell.w, cell.h);
+            if(cell.value){
+                ctx.strokeText(cell.value, cell.x + 6, cell.y + 14);
+            }
+        }
+    }
+
+    ctx.strokeRect(model.clear.x, model.clear.y, model.clear.w, model.clear.h);
+    ctx.strokeText("clear", model.clear.x + 6, model.clear.y + 14);
+
+    if(model.winner){
+        ctx.strokeText("WON BY " + model.winner, model.clear.x + 6, model.clear.y + 34);
+    }
+}
+        </script>
+        <style>
+body {
+    margin: 0;
+    padding: 0;
+}
+canvas {
+    position: absolute;
+    overflow: hidden;
+    display: block;
+}
+        </style>
+    </head>
+    <body onload="init();">
+        <canvas id="canvas"></canvas>
+    </body>
+</html>
