@@ -1,3 +1,3 @@
 # tictactoe
 
-A place for an to play with AI.
+A place for Ant to play with AI.
