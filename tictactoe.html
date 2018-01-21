@@ -1,19 +1,30 @@
 <html>
-    <head>
-        <script>
+<head>
+    <script>
+//https://en.wikipedia.org/wiki/Tic-tac-toe
+//26,830 possible games
+//if X starts, chances are 91 wins, 44 losses, 3 draws
+
+//TODO let user choose if X starts
+//TODO add different strategies
+
 var model = {};
 
 function init(){
     var canvas = document.getElementById("canvas");
-    var ctx = canvas.getContext("2d");
+
     canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
 
     document.addEventListener("click", click);
 
     buildModel();
+model.strategy = 'patternRecognition';
+
     test();
     clear();
+    resetStats();
+
     render();
 }
 
@@ -21,18 +32,49 @@ function click(e){
 
     if(isHit(e, model.clear)){
         clear();
-    } else {
+        render();
+    }else if(isHit(e, model.resetStats)){
+        resetStats();
+        render();
+    }else if(isHit(e, model.playAutonomously)){
+        toggleAuto();
+    } else if(!model.winner && !model.draw){
         var cell;
         for(i = 0; i < model.board.length; i++){
             for(j = 0; j < model.board[i].length; j++){
                 cell = model.board[i][j];
-                if(!cell.value && isHit(e, cell)){
-                    cell.value = "0";
-                    calculate();
+                if(!cell.v && isHit(e, cell)){
+                    selectCell(i, j, "O");
+                    playAi();
                     return;
                 }
             }
         }
+    }
+}
+
+function playAi(){
+    checkFinished();
+    if(!model.winner && !model.draw){
+        doAiMove();
+        checkFinished();
+    }
+    render();
+}
+
+function toggleAuto(){
+    model.playAutonomously.active = !model.playAutonomously.active;
+    autoPlay();
+}
+
+function autoPlay(){
+    if(model.playAutonomously.active){
+        if(model.winner || model.draw){
+            clear();
+        }
+        moveRandomly("O");
+        playAi();
+        setTimeout(autoPlay, 0);
     }
 }
 
@@ -48,126 +90,329 @@ function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min)) + min; //The maximum is exclusive and the minimum is inclusive
 }
 
-function calculate(){
+function doAiMove(){
+    if(model.strategy === 'patternRecognition'){
+        // have we seen this pattern? if so, and we had a winning solution, repeat it
+        var pattern = buildPattern(model.board);
+        var games = model.patternRecognition[pattern];
+        if(!games){
+            games = [];
+        }
+        //go through the games and see where we went next at the time
+        var placesToLose = [];
+        var placesToWin = [];
+        for(g = 0; g < games.length; g++){
+            var game = games[g];
+            var recreatedBoard = buildEmtpyBoard();
+            for(h = 0; h < game.h.length; h++){
+                var move = game.h[h];
+                recreatedBoard[move.i][move.j].v = move.v;
+                var patternAtMove = buildPattern(recreatedBoard);
+                if(pattern === patternAtMove){
+                    if(game.h.length >= h + 1){
+                        move = game.h[h + 1];
+                        if(game.won){
+                            placesToWin.push(move);
+                        }else{
+                            placesToLose.push(move);
+                        }
+                        break; //pattern wont be the same if we add moves!
+                    }
+                }
+            }
+        }
 
-    if(!model.winner){
-
-        checkFinished();
-
-        if(!model.winner){
-            while(true){
-                var i = getRandomInt(0, 3);
-                var j = getRandomInt(0, 3);
-                var cell = model.board[i][j];
-                if(!cell.value){
-                    cell.value = "X";
-                    break;
+        //dont lose! we used to try and win first, but its more important to prevent losing! humans do the same.
+        //eg you might have won once, but the human missed something. next time they dont, and you want to avoid losing.
+        if(placesToLose.length){
+            var boardWithPlacesNotToGo = buildEmtpyBoard();
+            for(i = 0; i < model.board.length; i++){
+                for(j = 0; j < model.board[i].length; j++){
+                    var placesToLoseContainsCurrentCell = false;
+                    for(k = 0; k < placesToLose.length; k++){
+                        var placeToLose = placesToLose[k];
+                        if(i === placeToLose.i && j === placeToLose.j){
+                            placesToLoseContainsCurrentCell = true;
+                            break;
+                        }
+                    }
+                    if(placesToLoseContainsCurrentCell){
+                        boardWithPlacesNotToGo[i][j].doNotGoHere = true;
+                    }
                 }
             }
 
-            checkFinished();
+            var possibleCellsToGoTo = [];
+            var cell;
+            for(i = 0; i < model.board.length; i++){
+                for(j = 0; j < model.board[i].length; j++){
+                    cell = boardWithPlacesNotToGo[i][j];
+                    if(!cell.doNotGoHere && !model.board[i][j].v){
+                        possibleCellsToGoTo.push(cell);
+                    }
+                }
+            }
+
+            if(possibleCellsToGoTo.length){
+                //now choose a random cell to go to
+                var index = getRandomInt(0, possibleCellsToGoTo.length);
+                cell = possibleCellsToGoTo[index];
+                console.log("selecting cell based on previous losses");
+                selectCell(cell.i, cell.j, "X");
+                return;
+            }
         }
 
-        render();
+        //try and win
+
+        placesToWin.sort(function(a, b){
+            //use totalMoves to choose moves which won with least moves
+            return a.totalMoves > b.totalMoves;
+        });
+        for(p = 0; p < placesToWin.length; p++){
+            var placeToWin = placesToWin[p];
+            if(!model.board[placeToWin.i][placeToWin.j].v){
+                console.log("selecting cell based on previous win");
+                selectCell(placeToWin.i, placeToWin.j, "X");
+                return;
+            }
+        }
     }
+
+    //TODO use for testing:
+    //moveDeterministically();
+    //console.log("selecting cell deterministically");
+    //TODO use for real:
+    console.log("selecting cell randomly");
+    moveRandomly("X");
+}
+
+function buildPattern(board) {
+    var pattern = "";
+    var v;
+    for(i = 0; i < board.length; i++){
+        for(j = 0; j < board[i].length; j++){
+            v = board[i][j].v;
+            if(!v){
+                v = "-";
+            }
+            pattern += v + "|";
+        }
+    }
+    return pattern;
+}
+
+function moveRandomly(player) {
+    var k = 0;
+    while(true){
+        k++;
+        if(k > 10000){
+            console.log("failed to move randomly. moving deterministically!");
+            if(!moveDeterministically()){
+                console.log("unable to move randomly or deterministically");
+            }
+            break;
+        }else{
+            var i = getRandomInt(0, 3);
+            var j = getRandomInt(0, 3);
+            var cell = model.board[i][j];
+            if(!cell.v){
+                selectCell(i, j, player);
+                break;
+            }
+        }
+    }
+}
+
+function moveDeterministically() {
+    for(i = 0; i < model.board.length; i++){
+        for(j = 0; j < model.board[i].length; j++){
+            var cell = model.board[i][j];
+            if(!cell.v){
+                selectCell(i, j, "X");
+                return {i: i, j: j};
+            }
+        }
+    }
+}
+
+function selectCell(i, j, v) {
+    if(model.board[i][j].v) throw new Error("cell " + i + "," + j + " is already selected by " + model.board[i][j].v);
+    model.board[i][j].v = v;
+    model.history.push({i: i, j:j, v: v});
 }
 
 function checkFinished() {
     var i, j;
 
     function sameNotNullHorizontal(i){
-        return model.board[i][0].value === model.board[i][1].value &&
-               model.board[i][1].value === model.board[i][2].value &&
-               model.board[i][0].value;
+        return model.board[i][0].v === model.board[i][1].v &&
+               model.board[i][1].v === model.board[i][2].v &&
+               model.board[i][0].v;
     }
     for(i = 0; i < model.board.length; i++){
         if(sameNotNullHorizontal(i)){
-            model.winner = model.board[i][0].value;
+            model.winner = model.board[i][0].v;
         }
     }
 
     function sameNotNullVertical(j){
-        return model.board[0][j].value === model.board[1][j].value &&
-               model.board[1][j].value === model.board[2][j].value &&
-               model.board[0][j].value;
+        return model.board[0][j].v === model.board[1][j].v &&
+               model.board[1][j].v === model.board[2][j].v &&
+               model.board[0][j].v;
     }
     for(j = 0; j < model.board.length; j++){
         if(sameNotNullVertical(j)){
-            model.winner = model.board[0][j].value;
+            model.winner = model.board[0][j].v;
         }
     }
 
-    if(model.board[0][0].value &&
-        model.board[0][0].value === model.board[1][1].value &&
-        model.board[1][1].value === model.board[2][2].value
+    if(model.board[0][0].v &&
+        model.board[0][0].v === model.board[1][1].v &&
+        model.board[1][1].v === model.board[2][2].v
     ){
-        model.winner = model.board[1][1].value;
+        model.winner = model.board[1][1].v;
     }
 
-    if(model.board[0][2].value &&
-        model.board[0][2].value === model.board[1][1].value &&
-        model.board[1][1].value === model.board[2][0].value
+    if(model.board[0][2].v &&
+        model.board[0][2].v === model.board[1][1].v &&
+        model.board[1][1].v === model.board[2][0].v
     ){
-        model.winner = model.board[1][1].value;
+        model.winner = model.board[1][1].v;
+    }
+
+    if(!model.winner){
+        //check for a draw
+        var allFull = true;
+        for(i = 0; i < model.board.length; i++){
+            for(j = 0; j < model.board[i].length; j++){
+                if(!model.board[i][j].v){
+                    allFull = false;
+                    break;
+                }
+            }
+        }
+        if(allFull){
+            model.draw = true;
+        }
+    }
+
+    if(model.winner || model.draw){
+        //remember all moves for the future
+        var won = model.winner === "X";
+        var recreatedBoard = buildEmtpyBoard();
+        var pattern = "";
+        for(h = 0; h < model.history.length; h++){
+            var move = model.history[h];
+            move.totalMoves = model.history.length;
+            recreatedBoard[move.i][move.j].v = move.v;
+            pattern = buildPattern(recreatedBoard);
+
+            if(!model.patternRecognition[pattern]){
+                model.patternRecognition[pattern] = [];
+            }
+
+            //if we just lost, we want to remove any previous knowledge of wins from this situation
+            //because if the player was a weak one / random one, they may have missed a possible win which
+            //they could now have. so we need to reset those wins to ensure that we always eliminate
+            //possible losses from this position onwards
+            model.patternRecognition[pattern] = model.patternRecognition[pattern].filter(function(g){
+                return g.won;
+            });
+
+            model.patternRecognition[pattern].push({h: model.history, won: won});
+        }
+
+        if(model.winner === "X"){
+            model.stats.xWins++;
+        }else if(model.winner === "O"){
+            model.stats.oWins++;
+        }else if(model.draw){
+            model.stats.draws++;
+        }
+
+        model.totalGames++;
     }
 }
 
+function buildEmtpyBoard() {
+    var board = [];
+    for(i = 0; i < 3; i++){
+        board[i] = [];
+        for(j = 0; j < 3; j++){
+            board[i][j] = {
+                i: i,
+                j: j,
+                x: 20 * i,
+                y: 20 * j,
+                w: 20,
+                h: 20
+            };
+        }
+    }
+    return board;
+}
+
 function test(){
-    model.board[0][0].value = "X";
-    model.board[1][0].value = "X";
-    model.board[2][0].value = "X";
+    model.board[0][0].v = "X";
+    model.board[1][0].v = "X";
+    model.board[2][0].v = "X";
     checkFinished();
     assert(model.winner === "X");
     clear();
 
-    model.board[0][1].value = "X";
-    model.board[1][1].value = "X";
-    model.board[2][1].value = "X";
+    model.board[0][1].v = "X";
+    model.board[1][1].v = "X";
+    model.board[2][1].v = "X";
     checkFinished();
     assert(model.winner === "X");
     clear();
 
-    model.board[0][2].value = "X";
-    model.board[1][2].value = "X";
-    model.board[2][2].value = "X";
+    model.board[0][2].v = "X";
+    model.board[1][2].v = "X";
+    model.board[2][2].v = "X";
     checkFinished();
     assert(model.winner === "X");
     clear();
 
-    model.board[0][0].value = "X";
-    model.board[0][1].value = "X";
-    model.board[0][2].value = "X";
+    model.board[0][0].v = "X";
+    model.board[0][1].v = "X";
+    model.board[0][2].v = "X";
     checkFinished();
     assert(model.winner === "X");
     clear();
 
-    model.board[1][0].value = "X";
-    model.board[1][1].value = "X";
-    model.board[1][2].value = "X";
+    model.board[1][0].v = "X";
+    model.board[1][1].v = "X";
+    model.board[1][2].v = "X";
     checkFinished();
     assert(model.winner === "X");
     clear();
 
-    model.board[2][0].value = "X";
-    model.board[2][1].value = "X";
-    model.board[2][2].value = "X";
+    model.board[2][0].v = "X";
+    model.board[2][1].v = "X";
+    model.board[2][2].v = "X";
     checkFinished();
     assert(model.winner === "X");
     clear();
 
-    model.board[0][0].value = "X";
-    model.board[1][1].value = "X";
-    model.board[2][2].value = "X";
+    model.board[0][0].v = "X";
+    model.board[1][1].v = "X";
+    model.board[2][2].v = "X";
     checkFinished();
     assert(model.winner === "X");
     clear();
 
-    model.board[0][2].value = "X";
-    model.board[1][1].value = "X";
-    model.board[2][0].value = "X";
+    model.board[0][2].v = "X";
+    model.board[1][1].v = "X";
+    model.board[2][0].v = "X";
     checkFinished();
     assert(model.winner === "X");
     clear();
+
+    // RESET MODEL READY TO PLAY AND LEARN!!!
+    model.patternRecognition = {};
+    model.totalGames = 0;
 }
 
 function assert(b, message){
@@ -179,38 +424,69 @@ function assert(b, message){
 }
 
 function buildModel(){
-    var i, j;
-    model.board = [];
-    for(i = 0; i < 3; i++){
-        model.board[i] = [];
-        for(j = 0; j < 3; j++){
-            model.board[i][j] = {
-                i: i,
-                j: j,
-                x: 20 * i,
-                y: 20 * j,
-                w: 20,
-                h: 20
-            };
-        }
-    }
 
+    model.xStarts = true;
+
+    //the board, including sizes. the value attribute will contain whether X or O selects.
+    var i, j;
+    model.board = buildEmtpyBoard();
+
+    //the clear button
     model.clear = {
         x: 10,
-        y: 100,
+        y: 80,
         w: 40,
         h: 20
+    };
+
+    //the resetStats button
+    model.resetStats = {
+        x: 60,
+        y: 80,
+        w: 80,
+        h: 20
+    };
+
+    //the playAutonomously button
+    model.playAutonomously = {
+        x: 150,
+        y: 80,
+        w: 130,
+        h: 20
+    };
+
+    //a place to store moves of the current game
+    model.history = [];
+
+    //a place to store pattern recogintion memory
+    model.patternRecognition = {};
+
+    model.totalGames = 0;
+
+    resetStats();
+}
+
+function resetStats(){
+    model.stats = {
+        xWins: 0,
+        oWins: 0,
+        draws: 0
     };
 }
 
 function clear(){
     for(i = 0; i < model.board.length; i++){
         for(j = 0; j < model.board[i].length; j++){
-            delete model.board[i][j].value;
+            delete model.board[i][j].v;
         }
     }
     delete model.winner;
-    render();
+    delete model.draw;
+    model.history = [];
+
+    if(model.xStarts){
+        playAi();
+    }
 }
 
 function render(){
@@ -218,13 +494,17 @@ function render(){
     var ctx = canvas.getContext("2d");
     var i, j, cell, x,y, w, h;
 
+    ctx.font = "14px Arial";
+    ctx.fillStyle = "black";
+    ctx.strokeStyle = "black";
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for(i = 0; i < model.board.length; i++){
         for(j = 0; j < model.board[i].length; j++){
             cell = model.board[i][j];
             ctx.strokeRect(cell.x, cell.y, cell.w, cell.h);
-            if(cell.value){
-                ctx.strokeText(cell.value, cell.x + 6, cell.y + 14);
+            if(cell.v){
+                ctx.strokeText(cell.v, cell.x + 5, cell.y + 15);
             }
         }
     }
@@ -232,12 +512,32 @@ function render(){
     ctx.strokeRect(model.clear.x, model.clear.y, model.clear.w, model.clear.h);
     ctx.strokeText("clear", model.clear.x + 6, model.clear.y + 14);
 
+    ctx.strokeRect(model.resetStats.x, model.resetStats.y, model.resetStats.w, model.resetStats.h);
+    ctx.strokeText("reset stats", model.resetStats.x + 6, model.resetStats.y + 14);
+
+    ctx.strokeRect(model.playAutonomously.x, model.playAutonomously.y, model.playAutonomously.w, model.playAutonomously.h);
+    ctx.strokeText("play autonomously", model.playAutonomously.x + 6, model.playAutonomously.y + 14);
+
+    ctx.strokeStyle = "red";
     if(model.winner){
-        ctx.strokeText("WON BY " + model.winner, model.clear.x + 6, model.clear.y + 34);
+        ctx.strokeText("WON BY " + model.winner, model.clear.x + 6, model.clear.y + 40);
+    }else if(model.draw){
+        ctx.strokeText("DRAW", model.clear.x + 6, model.clear.y + 40);
     }
+
+    ctx.strokeStyle = "black";
+    ctx.strokeText("X wins: " + model.stats.xWins, model.clear.x + 6, model.clear.y + 60);
+    ctx.strokeText("O wins: " + model.stats.oWins, model.clear.x + 6, model.clear.y + 75);
+    ctx.strokeText("Draws: " + model.stats.draws, model.clear.x + 6, model.clear.y + 90);
+    ctx.strokeText("X win percentage: " + (100*(model.stats.xWins)/(model.stats.draws+model.stats.xWins+model.stats.oWins)).toFixed(2), model.clear.x + 6, model.clear.y + 105);
+    ctx.strokeText("Total games played: " + model.totalGames, model.clear.x + 6, model.clear.y + 120);
+
+    ctx.strokeText("Tic Tac Toe", 100, 20);
+    ctx.strokeText("You play 'O', computer plays 'X'.", 100, 35);
+    ctx.strokeText("As you play, computer will learn.", 100, 50);
 }
-        </script>
-        <style>
+    </script>
+    <style>
 body {
     margin: 0;
     padding: 0;
@@ -247,9 +547,9 @@ canvas {
     overflow: hidden;
     display: block;
 }
-        </style>
-    </head>
-    <body onload="init();">
-        <canvas id="canvas"></canvas>
-    </body>
+    </style>
+</head>
+<body onload="init();">
+<canvas id="canvas"></canvas>
+</body>
 </html>
