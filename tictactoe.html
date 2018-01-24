@@ -13,15 +13,19 @@
 
 //its ok to use massive memory. why should machines be based on human learning?!
 
+
+
 //TODO does it develop the strategy to go on the corners first, as your more likely to win? it should
 //     do, because it tries winning moves which come from shortest games...
 //TODO add different strategies?? add eg neural network?
 //TODO remove duplicates in history
+//TODO dont play against a random, play against itself!
 
 var model = {};
 
 var HUMAN = "O";
 var COMPUTER = "X";
+var DRAW = "draw";
 
 function init(){
     var canvas = document.getElementById("canvas");
@@ -173,6 +177,7 @@ function doAiMove(){
         if(!games){
             games = [];
         }
+
         //go through the games and see where we went next at the time
         var placesToLose = [];
         var placesToWin = [];
@@ -189,7 +194,7 @@ function doAiMove(){
                         move = game.h[h + 1];
                         if(game.result === COMPUTER){
                             placesToWin.push(move);
-                        }else if(game.result === "draw"){
+                        }else if(game.result === DRAW){
                             placesToDraw.push(move);
                         }else if(game.result === HUMAN){
                             placesToLose.push(move);
@@ -203,8 +208,14 @@ function doAiMove(){
 //TODO if instant win/loss, then just try and win. otherwise avoid losing first!
 //     actually, probaby need to compare how quickly win and lose, and react to the one which happens first
 
+//if we do win first, and lose, we remove the win from history. so in the next game we see the same move
+//as a loss. try win first, and eventually if we keep losing all wins will be removed. if we then do get a draw
+//that will have prio over the losses. so order MUST be win-draw-loss.  what do we do with draws, when we lose?
+//do we remove them too, just as we do with wins? yes I think so.
+
+
         // ////////////////
-        // try and win
+        // try and win, as fast as possible
         // ////////////////
 
         placesToWin.sort(function(a, b){
@@ -285,7 +296,7 @@ function doAiMove(){
             }
         }
 
-    }
+	}
 
     model.currentPatternKnown = "No";
 
@@ -405,7 +416,7 @@ function checkFinished(board) {
             }
         }
         if(allFull){
-            return "draw";
+            return DRAW;
         }
     }
 
@@ -416,20 +427,20 @@ function checkAndHandleFinished(){
     var winner = checkFinished(model.board);
     if(winner){
         model.totalGames++;
-        if(winner === "draw"){
+        if(winner === DRAW){
             model.draw = true;
             model.stats.draws++;
         } else {
             model.winner = winner;
-            handleWin();
         }
+		handleEnd();
     }
 }
 
-function handleWin(){
+function handleEnd(){
 
     //remember all moves for the future
-    var result = model.draw ? "draw" : model.winner;
+    var result = model.draw ? DRAW : model.winner;
     var recreatedBoard = buildEmtpyBoard();
     var pattern = "";
     for(h = 0; h < model.history.length; h++){
@@ -439,18 +450,43 @@ function handleWin(){
         pattern = buildPattern(recreatedBoard);
 
         if(!model.patternRecognition[pattern]){
-            model.patternRecognition[pattern] = [];
+            model.patternRecognition[pattern] = []; //set value
         }
 
-        //if we just lost, we want to remove any previous knowledge of wins from this situation
+        //if we just lost, we want to remove any previous knowledge of wins and draws from this situation
         //because if the player was a weak one / random one, they may have missed a possible win which
         //they could now have. so we need to reset those wins to ensure that we always eliminate
         //possible losses from this position onwards
-        model.patternRecognition[pattern] = model.patternRecognition[pattern].filter(function(g){
-            return g.result === COMPUTER;
-        });
+		if(result === HUMAN){
+			model.patternRecognition[pattern] = model.patternRecognition[pattern].filter(function(g){
+				return g.result === HUMAN; //keep only losses. wins and draws are out
+			}); //set value
+		}
+		//similar if we just drew
+		if(result === DRAW){
+			model.patternRecognition[pattern] = model.patternRecognition[pattern].filter(function(g){
+				return g.result === HUMAN || g.result === DRAW; //keep losses and draws, but not wins
+			}); //set value
+		}
 
-        model.patternRecognition[pattern].push({h: model.history, result: result});
+		//if an identical history already exists, dont bother re-adding it
+		
+		var latest = {h: model.history, result: result};
+		var latestString = JSON.stringify(latest);
+		var found = false;
+		var m;
+		var patterns = model.patternRecognition[pattern];
+		for(m = 0; m < patterns.length; m++) {
+			if(latestString === JSON.stringify(patterns[m])){
+				found = true;
+				break;
+			}
+		}
+		if(!found){
+			patterns.push(latest);
+
+			console.log('Models are using ' + (JSON.stringify(model).length/1024/1024) + ' megabytes');
+		}
     }
 
     if(model.winner === "X"){
