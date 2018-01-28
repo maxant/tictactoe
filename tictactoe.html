@@ -13,15 +13,49 @@
 
 //its ok to use massive memory. why should machines be based on human learning?!
 
+//without the ai strategy, i can win 7/8 times if i start, because it doesnt know how to block starting in the middle or corners
+
+/*
+win from middle:
+---  -O-  -O-                                                            -O-  -O-
+-X-  -X-  -XX  at this stage, O is already being forced and controlled.  OXX  OXX now X has two winning moves: top left or top right. O losses.
+---  ---  ---                                                            ---  --X
+the way to block winning from the middle is to move in a corner. outcome is always a draw i think.
+
+win from corners
+X--  X--  X--
+---  ---  --- X now has three ways to win: middle middle or middle left or bottom middle
+---  X--  X-X
+
+
+computer now learns against itself. after 500 moves its not clever enough to avoid losing to central start.
+after a number of goes, it learns that nowhere is good for the first move. then it starts learning that the second move is critical.
+eventually it will draw, and will learn how to. thats the plan. lets test it!
+*/
+
+//TODO add exploration: https://en.wikipedia.org/wiki/Reinforcement_learning => exploration vs exploitation of known outcomes
+        //  numTimesExploited: 0,
+        //  numTimesExplored: 0,
+
+//TODO dont remove wins. rather cound wins draws losses and use it in the decision of where to go next. if you won more than you lost, it is a good move und umgekehrt.
+
+//TODO is it important how many times they won from the given position using a certain move? probably. esp if not playing random. so we should count how often they won for each move, and use that info together with which is the quickest move, to determine what the next move should be
+// => the reward depends not just on the win, but also on the move. can we say that?
+//TODO measure percentages after say 1000, 2000, and 5000 moves.  measure with instantWinLoss, without, and without strategy too.
+//TODO how many games are required before it learns enough to not require checking instant wins/losses?
 //TODO does it develop the strategy to go on the corners first, as your more likely to win? it should
 //     do, because it tries winning moves which come from shortest games...
 //TODO add different strategies?? add eg neural network?
 //TODO remove duplicates in history
+//TODO dont play against a random, play against itself! otherwise its not learning properly?
 
 var model = {};
 
-var HUMAN = "O";
-var COMPUTER = "X";
+var O = "O";
+var X = "X";
+var HUMAN = O;
+var COMPUTER = X;
+var DRAW = "draw";
 
 function init(){
     var canvas = document.getElementById("canvas");
@@ -32,7 +66,13 @@ function init(){
     document.addEventListener("click", click);
 
     buildModel();
-model.strategy = 'patternRecognition';
+
+	// ////////////////////
+	// configuration
+	// ////////////////////
+	model.strategy = 'patternRecognition';
+	//model.strategy = 'none'; see comment above. without a strategy, the computer doesnt learn to block humans who know about corners/middle
+	model.useInstantWinLossChecks = false; //markedly improves intelligence quickly.
 
     test();
     clear();
@@ -42,6 +82,8 @@ model.strategy = 'patternRecognition';
 }
 
 function click(e){
+
+	var cell;
 
     if(isHit(e, model.clear)){
         clear();
@@ -53,14 +95,14 @@ function click(e){
         toggleAuto();
     }else if(isHit(e, model.whoPlaysWhat)){
         toggleWhoPlaysWhat();
-    } else if(!model.winner && !model.draw){
-        var cell;
+    } else if(isNotFinished()){
+		//find where user is clicking and move there
         for(i = 0; i < model.board.length; i++){
             for(j = 0; j < model.board[i].length; j++){
                 cell = model.board[i][j];
                 if(!cell.v && isHit(e, cell)){
                     selectCell(i, j, HUMAN);
-                    playAi();
+                    playAi(COMPUTER, HUMAN);
                     return;
                 }
             }
@@ -68,16 +110,26 @@ function click(e){
     }
 }
 
+function isNotFinished(){
+	//the game is still in play if not drawn and there is no winner
+	return !model.winner && !model.draw;
+}
+
+function isFinished(){
+	return !isNotFinished();
+}
+
 function toggleWhoPlaysWhat(){
     model.computerStarts = !model.computerStarts;
-    clear();
+    clear(); //restart game
     render();
 }
 
-function playAi(){
+/** does a move for the computer if the came is not yet finished */
+function playAi(player, rival){
     checkAndHandleFinished();
-    if(!model.winner && !model.draw){
-        doAiMove();
+    if(isNotFinished()){
+        doAiMove(player, rival);
         checkAndHandleFinished();
     }
     render();
@@ -90,15 +142,16 @@ function toggleAuto(){
 
 function autoPlay(){
     if(model.playAutonomously.active){
-        if(model.winner || model.draw){
+        if(isFinished()){
             clear();
         }
-        moveRandomly(HUMAN);
-        playAi();
+        playAi(HUMAN, COMPUTER);
+        playAi(COMPUTER, HUMAN);
         setTimeout(autoPlay, 0);
     }
 }
 
+/** is the click event inside the cell? */
 function isHit(e, cell){
     return (e.x >= cell.x && e.x <= cell.x + cell.w) &&
             (e.y >= cell.y && e.y <= cell.y + cell.h);
@@ -111,190 +164,213 @@ function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min)) + min; //The maximum is exclusive and the minimum is inclusive
 }
 
-function doAiMove(){
+/** this is where the heavy lifting is done. */
+function doAiMove(player, rival){
 
-    // ////////////////////////////
-    // search for an instant win
-    // ////////////////////////////
-    // copy board
-    var copyOfBoard = buildEmtpyBoard();
-    for(i = 0; i < model.board.length; i++){
-        for(j = 0; j < model.board[i].length; j++){
-            copyOfBoard[i][j].v = model.board[i][j].v;
-        }
-    }
-    // attempt all places that are free
-    for(i = 0; i < model.board.length; i++){
-        for(j = 0; j < model.board[i].length; j++){
-            if(!copyOfBoard[i][j].v){
-                copyOfBoard[i][j].v = COMPUTER;
-                if(checkFinished(copyOfBoard) === COMPUTER){
-                    console.log("found instant win at " + i + "," + j);
-                    selectCell(i, j, COMPUTER);
-                    model.currentPatternKnown = "No, but found an instant win";
-                    return;
-                }else{
-                    //reset and try next free cell
-                    delete copyOfBoard[i][j].v;
-                }
-            }
-        }
-    }
+	if(model.useInstantWinLossChecks){// || (model.playAutonomously.active)){
+		// ////////////////////////////
+		// search for an instant win
+		// ////////////////////////////
+		// copy board
+		var copyOfBoard = buildEmtpyBoard();
+		for(i = 0; i < model.board.length; i++){
+			for(j = 0; j < model.board[i].length; j++){
+				copyOfBoard[i][j].v = model.board[i][j].v;
+			}
+		}
+		// attempt all places that are free
+		for(i = 0; i < model.board.length; i++){
+			for(j = 0; j < model.board[i].length; j++){
+				if(!copyOfBoard[i][j].v){
+					copyOfBoard[i][j].v = player;
+					if(checkFinished(copyOfBoard) === player){
+						console.log("found instant win at " + i + "," + j);
+						selectCell(i, j, player);
+						model.currentPatternKnown = "No, but found an instant win";
+						return;
+					}else{
+						//reset and try next free cell
+						delete copyOfBoard[i][j].v;
+					}
+				}
+			}
+		}
 
-    // ////////////////////////////
-    // avoid instant loss
-    // ////////////////////////////
-    for(i = 0; i < model.board.length; i++){
-        for(j = 0; j < model.board[i].length; j++){
-            if(!copyOfBoard[i][j].v){
-                copyOfBoard[i][j].v = HUMAN;
-                if(checkFinished(copyOfBoard) === HUMAN){
-                    console.log("found instant lose at " + i + "," + j);
-                    selectCell(i, j, COMPUTER);
-                    model.currentPatternKnown = "No, but avoiding loss";
-                    return;
-                }else{
-                    //reset and try next free cell
-                    delete copyOfBoard[i][j].v;
-                }
-            }
-        }
-    }
+		// ////////////////////////////
+		// avoid instant loss
+		// ////////////////////////////
+		for(i = 0; i < model.board.length; i++){
+			for(j = 0; j < model.board[i].length; j++){
+				if(!copyOfBoard[i][j].v){
+					copyOfBoard[i][j].v = rival;
+					if(checkFinished(copyOfBoard) === rival){
+						console.log("found instant lose at " + i + "," + j);
+						selectCell(i, j, player);
+						model.currentPatternKnown = "No, but avoiding loss";
+						return;
+					}else{
+						//reset and try next free cell
+						delete copyOfBoard[i][j].v;
+					}
+				}
+			}
+		}
 
-    // ////////////////////////////////////////////////////
-    // No instant win, so use the strategy to get a win
-    // ////////////////////////////////////////////////////
+		// ////////////////////////////////////////////////////
+		// No instant win, so use the strategy to get a win
+		// ////////////////////////////////////////////////////
+	}
 
     model.currentPatternKnown = "Yes";
     if(model.strategy === 'patternRecognition'){
         // have we seen this pattern? if so, and we had a winning solution, repeat it
         var pattern = buildPattern(model.board);
-        var games = model.patternRecognition[pattern];
-        if(!games){
-            games = [];
-        }
-        //go through the games and see where we went next at the time
-        var placesToLose = [];
-        var placesToWin = [];
-        var placesToDraw = [];
-        for(g = 0; g < games.length; g++){
-            var game = games[g];
-            var recreatedBoard = buildEmtpyBoard();
-            for(h = 0; h < game.h.length; h++){
-                var move = game.h[h];
-                recreatedBoard[move.i][move.j].v = move.v;
-                var patternAtMove = buildPattern(recreatedBoard);
-                if(pattern === patternAtMove){
-                    if(game.h.length >= h + 1){
-                        move = game.h[h + 1];
-                        if(game.result === COMPUTER){
-                            placesToWin.push(move);
-                        }else if(game.result === "draw"){
-                            placesToDraw.push(move);
-                        }else if(game.result === HUMAN){
-                            placesToLose.push(move);
-                        }
-                        break; //pattern wont be the same if we add moves!
+        var memory = model.patternRecognition[pattern];
+        var chosenMove;
+        if(memory){
+            //structure:
+            //model.patternRecognition[pattern] = {
+            //  numTimesExploited: 0,
+            //  numTimesExplored: 0,
+            //  possibleNextMoves: [{
+            //    i: 0,
+            //    j: 0,
+            //    numXWins: 0,
+            //    numOWins: 0,
+            //    numDraws: 0
+            //  }]
+            //}
+
+            //group by wins, draws losses
+            var placesToWin = [];
+            var placesToDraw = [];
+            var placesToLose = [];
+            for(pnm = 0; pnm < memory.possibleNextMoves.length; pnm++){
+                var possibleMove = memory.possibleNextMoves[pnm];
+                if(!model.board[possibleMove.i][possibleMove.j].v){
+                    numWins = player === X ? possibleMove.numXWins : possibleMove.numOWins;
+                    numDraws = possibleMove.numDraws;
+                    numLosses = player === X ? possibleMove.numOWins : possibleMove.numXWins;
+
+                    if(numWins >= numDraws && numWins >= numLosses){
+                        // 3/3/3 would also be treated as a win
+                        placesToWin.push(possibleMove);
+                    } else if(numDraws >= numWins && numDraws >= numLosses){
+                        // 2/3/3 would also be treated as a draw
+                        placesToDraw.push(possibleMove);
+                    }else{
+                        placesToLose.push(possibleMove);
                     }
+                }else{
+                    //ignore, because the space isnt free
                 }
             }
-        }
 
-//TODO if instant win/loss, then just try and win. otherwise avoid losing first!
-//     actually, probaby need to compare how quickly win and lose, and react to the one which happens first
+            // /////////////////////////////////////////////////////////////////////////////////////
+            // try and win, else draw, else avoid losing.
+            // /////////////////////////////////////////////////////////////////////////////////////
 
-        // ////////////////
-        // try and win
-        // ////////////////
+            // ////////////////
+            // try and win, as fast as possible
+            // ////////////////
 
-        placesToWin.sort(function(a, b){
-            //use totalMoves to choose moves which won with least moves
-            return a.totalMoves > b.totalMoves;
-        });
-        console.log("places to win: " + JSON.stringify(placesToWin.map(function(e){return {i: e.i, j: e.j, w: e.totalMoves};})));
-        for(p = 0; p < placesToWin.length; p++){
-            var placeToWin = placesToWin[p];
-            if(!model.board[placeToWin.i][placeToWin.j].v){
+            placesToWin.sort(function(a, b){
+                if(player === X){
+                    return a.numXWins > b.numXWins;
+                }else{
+                    return a.numOWins > b.numOWins;
+                }
+            });
+            console.log("places to win: " + JSON.stringify(placesToWin.map(function(e){return {i: e.i, j: e.j, w: (player===X?e.numXWins:e.numOWins)};})));
+            for(p = 0; p < placesToWin.length; p++){
+                var placeToWin = placesToWin[p];
                 console.log("selecting cell based on previous win");
-                selectCell(placeToWin.i, placeToWin.j, COMPUTER);
+                selectCell(placeToWin.i, placeToWin.j, player);
                 model.currentPatternKnown = "Yes, won";
                 return;
             }
-        }
 
-        // ////////////////
-        // try and draw
-        // ////////////////
+            // ////////////////
+            // try and draw
+            // ////////////////
 
-        console.log("places to draw: " + JSON.stringify(placesToDraw.map(function(e){return {i: e.i, j: e.j};})));
-        for(p = 0; p < placesToDraw.length; p++){
-            var placeToDraw = placesToDraw[p];
-            if(!model.board[placeToDraw.i][placeToDraw.j].v){
+            placesToDraw.sort(function(a, b){
+                return a.numDraws > b.numDraws;
+            });
+            console.log("places to draw: " + JSON.stringify(placesToDraw.map(function(e){return {i: e.i, j: e.j};})));
+            for(p = 0; p < placesToDraw.length; p++){
+                var placeToDraw = placesToDraw[p];
                 console.log("selecting cell based on previous draw");
-                selectCell(placeToDraw.i, placeToDraw.j, COMPUTER);
+                selectCell(placeToDraw.i, placeToDraw.j, player);
                 model.currentPatternKnown = "Yes, drew";
                 return;
             }
-        }
 
-        // ////////////////
-        // dont lose! we used to try and win first, but its more important to prevent losing! humans do the same.
-        // eg you might have won once, but the human missed something. next time they dont, and you want to avoid losing.
-        // ////////////////
-        console.log("places to lose: " + JSON.stringify(placesToLose.map(function(e){return {i: e.i, j: e.j, w: e.totalMoves};})));
-        if(placesToLose.length){
-            var boardWithPlacesNotToGo = buildEmtpyBoard();
-            for(i = 0; i < model.board.length; i++){
-                for(j = 0; j < model.board[i].length; j++){
-                    var placesToLoseContainsCurrentCell = false;
-                    for(k = 0; k < placesToLose.length; k++){
-                        var placeToLose = placesToLose[k];
-                        if(i === placeToLose.i && j === placeToLose.j){
-                            placesToLoseContainsCurrentCell = true;
-                            break;
+
+            // ////////////////
+            // dont lose!
+            // ////////////////
+            placesToLose.sort(function(a, b){
+                if(player === X){
+                    return a.numOWins > b.numOWins;
+                }else{
+                    return a.numXWins > b.numXWins;
+                }
+            });
+            console.log("places to lose: " + JSON.stringify(placesToLose.map(function(e){return {i: e.i, j: e.j, w: (player ===X?e.numOWins:e.numXWins)};})));
+            if(placesToLose.length){
+                var boardWithPlacesNotToGo = buildEmtpyBoard();
+                for(i = 0; i < model.board.length; i++){
+                    for(j = 0; j < model.board[i].length; j++){
+                        var placesToLoseContainsCurrentCell = false;
+                        for(k = 0; k < placesToLose.length; k++){
+                            var placeToLose = placesToLose[k];
+                            if(i === placeToLose.i && j === placeToLose.j){
+                                placesToLoseContainsCurrentCell = true;
+                                break;
+                            }
+                        }
+                        if(placesToLoseContainsCurrentCell){
+                            boardWithPlacesNotToGo[i][j].doNotGoHere = true;
                         }
                     }
-                    if(placesToLoseContainsCurrentCell){
-                        boardWithPlacesNotToGo[i][j].doNotGoHere = true;
+                }
+
+                var possibleCellsToGoTo = [];
+                var cell;
+                for(i = 0; i < model.board.length; i++){
+                    for(j = 0; j < model.board[i].length; j++){
+                        cell = boardWithPlacesNotToGo[i][j];
+                        if(cell.doNotGoHere){
+                            console.log("places not to go: " + i + "," + j);
+                        }else if(!model.board[i][j].v){
+                            possibleCellsToGoTo.push(cell);
+                        }
                     }
                 }
-            }
 
-            var possibleCellsToGoTo = [];
-            var cell;
-            for(i = 0; i < model.board.length; i++){
-                for(j = 0; j < model.board[i].length; j++){
-                    cell = boardWithPlacesNotToGo[i][j];
-                    if(cell.doNotGoHere){
-                        console.log("places not to go: " + i + "," + j);
-                    }else if(!model.board[i][j].v){
-                        possibleCellsToGoTo.push(cell);
-                    }
+                console.log("possible cells to go to: " + JSON.stringify(possibleCellsToGoTo.map(function(e){return {i: e.i, j: e.j};})));
+                if(possibleCellsToGoTo.length){
+                    //now choose a random cell to go to
+                    var index = getRandomInt(0, possibleCellsToGoTo.length);
+                    cell = possibleCellsToGoTo[index];
+                    console.log("selecting cell based on previous losses");
+                    selectCell(cell.i, cell.j, player);
+                    model.currentPatternKnown = "Yes, lost";
+                    return;
                 }
-            }
-
-            console.log("possible cells to go to: " + JSON.stringify(possibleCellsToGoTo.map(function(e){return {i: e.i, j: e.j};})));
-            if(possibleCellsToGoTo.length){
-                //now choose a random cell to go to
-                var index = getRandomInt(0, possibleCellsToGoTo.length);
-                cell = possibleCellsToGoTo[index];
-                console.log("selecting cell based on previous losses");
-                selectCell(cell.i, cell.j, COMPUTER);
-                model.currentPatternKnown = "Yes, lost";
-                return;
             }
         }
-
-    }
+	}
 
     model.currentPatternKnown = "No";
 
     //TODO use for testing:
-    //moveDeterministically();
+    //moveDeterministically(player);
     //console.log("selecting cell deterministically");
     //TODO use for real:
     console.log("selecting cell randomly");
-    moveRandomly(COMPUTER);
+    moveRandomly(player);
 }
 
 function buildPattern(board) {
@@ -317,14 +393,16 @@ function moveRandomly(player) {
     while(true){
         k++;
         if(k > 10000){
+			//very unlikely to happen
             console.log("failed to move randomly. moving deterministically!");
-            if(!moveDeterministically()){
+            if(!moveDeterministically(player)){
+				//should only happen if theres a bug
                 console.log("unable to move randomly or deterministically");
             }
             break;
         }else{
-            var i = getRandomInt(0, 3);
-            var j = getRandomInt(0, 3);
+            var i = getRandomInt(0, model.board.length);
+            var j = getRandomInt(0, model.board.length);
             var cell = model.board[i][j];
             if(!cell.v){
                 selectCell(i, j, player);
@@ -334,12 +412,13 @@ function moveRandomly(player) {
     }
 }
 
-function moveDeterministically() {
+/** does a raster scan and moves in first empty cell */
+function moveDeterministically(player) {
     for(i = 0; i < model.board.length; i++){
         for(j = 0; j < model.board[i].length; j++){
             var cell = model.board[i][j];
             if(!cell.v){
-                selectCell(i, j, COMPUTER);
+                selectCell(i, j, player);
                 return {i: i, j: j};
             }
         }
@@ -354,8 +433,11 @@ function selectCell(i, j, v) {
     console.log("=================");
 }
 
+/** returns DRAW if all squares are full with no winner, otherwise COMPUTER or HUMAN depending on who won. otherwise undefined. */
 function checkFinished(board) {
     var i, j, winner;
+
+	// TODO rewrite this function to be dynamic so that it works with any board size
 
     function sameNotNullHorizontal(i){
         return board[i][0].v === board[i][1].v &&
@@ -405,7 +487,7 @@ function checkFinished(board) {
             }
         }
         if(allFull){
-            return "draw";
+            return DRAW;
         }
     }
 
@@ -416,49 +498,76 @@ function checkAndHandleFinished(){
     var winner = checkFinished(model.board);
     if(winner){
         model.totalGames++;
-        if(winner === "draw"){
+        if(winner === DRAW){
             model.draw = true;
-            model.stats.draws++;
         } else {
             model.winner = winner;
-            handleWin();
         }
+		handleEnd();
     }
 }
 
-function handleWin(){
+function handleEnd(){
 
     //remember all moves for the future
-    var result = model.draw ? "draw" : model.winner;
+    var result = model.draw ? DRAW : model.winner;
     var recreatedBoard = buildEmtpyBoard();
     var pattern = "";
+    var memory;
     for(h = 0; h < model.history.length; h++){
         var move = model.history[h];
-        move.totalMoves = model.history.length;
         recreatedBoard[move.i][move.j].v = move.v;
         pattern = buildPattern(recreatedBoard);
-
-        if(!model.patternRecognition[pattern]){
-            model.patternRecognition[pattern] = [];
+        memory = model.patternRecognition[pattern];
+        if(!memory){
+            memory = {
+                possibleNextMoves: [],
+                numTimesExploited: 0,
+                numTimesExplored: 0
+            };
+            model.patternRecognition[pattern] = memory;
         }
 
-        //if we just lost, we want to remove any previous knowledge of wins from this situation
-        //because if the player was a weak one / random one, they may have missed a possible win which
-        //they could now have. so we need to reset those wins to ensure that we always eliminate
-        //possible losses from this position onwards
-        model.patternRecognition[pattern] = model.patternRecognition[pattern].filter(function(g){
-            return g.result === COMPUTER;
-        });
 
-        model.patternRecognition[pattern].push({h: model.history, result: result});
+        if(model.history[h+1]){
+            var pnm = 0;
+            for(pnm in memory.possibleNextMoves){
+                var possibleNextMove = memory.possibleNextMoves[pnm];
+                if(possibleNextMove.i === model.history[h+1].i &&
+                    possibleNextMove.j === model.history[h+1].j ){
+
+                    break;
+                }
+            }
+
+            if(pnm >= memory.possibleNextMoves.length){
+                memory.possibleNextMoves.push(
+                    {
+                        i: model.history[h+1].i,
+                        j: model.history[h+1].j,
+                        numXWins: 0,
+                        numOWins: 0,
+                        numDraws: 0
+                    }
+                );
+            }
+            if(result === X) {
+                memory.possibleNextMoves[pnm].numXWins++;
+            }else if(result === O){
+                memory.possibleNextMoves[pnm].numOWins++;
+            }else{
+                memory.possibleNextMoves[pnm].numDraws++;
+            }
+        }
     }
 
-    if(model.winner === "X"){
+    if(model.winner === X){
         model.stats.xWins++;
-    }else if(model.winner === "O"){
+    }else if(model.winner === O){
         model.stats.oWins++;
+    }else{
+        model.stats.draws++;
     }
-
 }
 
 function buildEmtpyBoard() {
@@ -480,60 +589,60 @@ function buildEmtpyBoard() {
 }
 
 function test(){
-    model.board[0][0].v = "X";
-    model.board[1][0].v = "X";
-    model.board[2][0].v = "X";
+    model.board[0][0].v = X;
+    model.board[1][0].v = X;
+    model.board[2][0].v = X;
     checkAndHandleFinished();
-    assert(model.winner === "X");
+    assert(model.winner === X);
     clear();
 
-    model.board[0][1].v = "X";
-    model.board[1][1].v = "X";
-    model.board[2][1].v = "X";
+    model.board[0][1].v = X;
+    model.board[1][1].v = X;
+    model.board[2][1].v = X;
     checkAndHandleFinished();
-    assert(model.winner === "X");
+    assert(model.winner === X);
     clear();
 
-    model.board[0][2].v = "X";
-    model.board[1][2].v = "X";
-    model.board[2][2].v = "X";
+    model.board[0][2].v = X;
+    model.board[1][2].v = X;
+    model.board[2][2].v = X;
     checkAndHandleFinished();
-    assert(model.winner === "X");
+    assert(model.winner === X);
     clear();
 
-    model.board[0][0].v = "X";
-    model.board[0][1].v = "X";
-    model.board[0][2].v = "X";
+    model.board[0][0].v = X;
+    model.board[0][1].v = X;
+    model.board[0][2].v = X;
     checkAndHandleFinished();
-    assert(model.winner === "X");
+    assert(model.winner === X);
     clear();
 
-    model.board[1][0].v = "X";
-    model.board[1][1].v = "X";
-    model.board[1][2].v = "X";
+    model.board[1][0].v = X;
+    model.board[1][1].v = X;
+    model.board[1][2].v = X;
     checkAndHandleFinished();
-    assert(model.winner === "X");
+    assert(model.winner === X);
     clear();
 
-    model.board[2][0].v = "X";
-    model.board[2][1].v = "X";
-    model.board[2][2].v = "X";
+    model.board[2][0].v = X;
+    model.board[2][1].v = X;
+    model.board[2][2].v = X;
     checkAndHandleFinished();
-    assert(model.winner === "X");
+    assert(model.winner === X);
     clear();
 
-    model.board[0][0].v = "X";
-    model.board[1][1].v = "X";
-    model.board[2][2].v = "X";
+    model.board[0][0].v = X;
+    model.board[1][1].v = X;
+    model.board[2][2].v = X;
     checkAndHandleFinished();
-    assert(model.winner === "X");
+    assert(model.winner === X);
     clear();
 
-    model.board[0][2].v = "X";
-    model.board[1][1].v = "X";
-    model.board[2][0].v = "X";
+    model.board[0][2].v = X;
+    model.board[1][1].v = X;
+    model.board[2][0].v = X;
     checkAndHandleFinished();
-    assert(model.winner === "X");
+    assert(model.winner === X);
     clear();
 
     // RESET MODEL READY TO PLAY AND LEARN!!!
@@ -592,7 +701,7 @@ function buildModel(){
     //a place to store moves of the current game
     model.history = [];
 
-    //a place to store pattern recogintion memory
+    //a place to store pattern recognition memory
     model.patternRecognition = {};
 
     model.totalGames = 0;
@@ -608,6 +717,7 @@ function resetStats(){
     };
 }
 
+/** reset the game */
 function clear(){
     for(i = 0; i < model.board.length; i++){
         for(j = 0; j < model.board[i].length; j++){
@@ -619,12 +729,12 @@ function clear(){
     model.history = [];
 
     if(model.computerStarts){
-        COMPUTER = "X";
-        HUMAN = "O";
-        playAi();
+        COMPUTER = X;
+        HUMAN = O;
+        playAi(COMPUTER, HUMAN);
     }else{
-        COMPUTER = "O";
-        HUMAN = "X";
+        COMPUTER = O;
+        HUMAN = X;
     }
 }
 
@@ -683,6 +793,7 @@ function render(){
     ctx.strokeText("You play '" + HUMAN + "', computer plays '" + COMPUTER + "'.", 100, 50);
     ctx.strokeText("As you play the computer will learn.", 100, 65);
 }
+
     </script>
     <style>
 body {
@@ -694,6 +805,7 @@ canvas {
     overflow: hidden;
     display: block;
 }
+
     </style>
 </head>
 <body onload="init();">
