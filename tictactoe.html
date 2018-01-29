@@ -241,10 +241,13 @@ function doAiMove(player, rival){
             //  }]
             //}
 
-            //group by wins, draws losses
-            var placesToWin = [];
-            var placesToDraw = [];
-            var placesToLose = [];
+            var totalNumOutcomes = 0;
+            for(pnm = 0; pnm < memory.possibleNextMoves.length; pnm++){
+                var possibleMove = memory.possibleNextMoves[pnm];
+                totalNumOutcomes += possibleMove.numXWins;
+                totalNumOutcomes += possibleMove.numOWins;
+                totalNumOutcomes += possibleMove.numDraws;
+            }
             for(pnm = 0; pnm < memory.possibleNextMoves.length; pnm++){
                 var possibleMove = memory.possibleNextMoves[pnm];
                 if(!model.board[possibleMove.i][possibleMove.j].v){
@@ -252,13 +255,56 @@ function doAiMove(player, rival){
                     numDraws = possibleMove.numDraws;
                     numLosses = player === X ? possibleMove.numOWins : possibleMove.numXWins;
 
-                    if(numWins >= numDraws && numWins >= numLosses){
-                        // 3/3/3 would also be treated as a win
+                    possibleMove.chanceOfWin = numWins / totalNumOutcomes;
+                    possibleMove.chanceOfDraw = numDraw / totalNumOutcomes;
+                    possibleMove.chanceOfLoss = numLosses / totalNumOutcomes;
+                }
+            }
+
+            memory.possibleNextMoves.sort(function(a, b){
+???
+            });
+
+what we actually want to do here is to find a few places to avoid and then decide where to go based on win/draw chances.
+sort based on chance of losing. based on how many places we can go, decide how many to avoid.
+then based on whats left, decide where to go.
+BUT in chess a bad move doesnt necessarily mean an instant loss. you could checkmate ;-)
+
+            //group by wins, draws losses
+            var placesToWin = [];
+            var placesToDraw = [];
+            var placesToLose = [];
+            for(pnm = 0; pnm < memory.possibleNextMoves.length; pnm++){
+                var possibleMove = memory.possibleNextMoves[pnm];
+
+					//TODO different logic: find a square where i have a move that won lots, otherwise a square that i have drawn lots, otherwise a square where i have a move that didnt lose
+					// somehow though, im not thinking right. its important that i also lost loads on a square. just because i won once, doesnt mean that the 150 losses are irelevant.
+					//so how do we choose a square to go to? probability?
+					//from square 0,0 i have won 3 times and lost 100
+					//from square 0,1 i have never one, but only lost once
+					//i dont really know enough about square 0,1 to say that its better. its less likely that i will lose (1 out of 101 or 1 out of 104 moves)
+					//at the same time, its more likely that i will win if i go to square 0,0 because there, three moves out of 104 won, compared to square 0,1 where its zero.
+					//exploration is important, as it will help me improve knowledge about untested squares. base exploration on where i have gone least.
+					//so how do i decide where to go now, based on the info above???
+					//
+					//    3/104=2.88% chance of win    |    |
+					//    100/104=96.2% chance of loss |    |
+					//    ---------------------------------------
+					//    0/104=0% win                 |    |
+					//    1/104=0.96% loss             |    |
+					//    ---------------------------------------
+					//                                 |    |
+					//
+					// so based on percentages based on total moves, we are most likely to lose. so lets avoid that.
+					// use exploration to increase wins!
+					//
+                    if(numWins){
                         placesToWin.push(possibleMove);
-                    } else if(numDraws >= numWins && numDraws >= numLosses){
-                        // 2/3/3 would also be treated as a draw
+                    }
+					if(numDraws){
                         placesToDraw.push(possibleMove);
-                    }else{
+                    }
+					if(numLosses){
                         placesToLose.push(possibleMove);
                     }
                 }else{
@@ -531,7 +577,7 @@ function handleEnd(){
 
         if(model.history[h+1]){
             var pnm = 0;
-            for(pnm in memory.possibleNextMoves){
+			for(; pnm < memory.possibleNextMoves.length; pnm++) {
                 var possibleNextMove = memory.possibleNextMoves[pnm];
                 if(possibleNextMove.i === model.history[h+1].i &&
                     possibleNextMove.j === model.history[h+1].j ){
