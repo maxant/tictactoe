@@ -167,7 +167,7 @@ function getRandomInt(min, max) {
 /** this is where the heavy lifting is done. */
 function doAiMove(player, rival){
 
-	if(model.useInstantWinLossChecks){// || (model.playAutonomously.active)){
+	if(model.useInstantWinLossChecks || (model.playAutonomously.active && player === HUMAN)){ //train the AI against something a little more intelligent so it isnt learning to beat a monkey
 		// ////////////////////////////
 		// search for an instant win
 		// ////////////////////////////
@@ -226,8 +226,12 @@ function doAiMove(player, rival){
         // have we seen this pattern? if so, and we had a winning solution, repeat it
         var pattern = buildPattern(model.board);
         var memory = model.patternRecognition[pattern];
-        var chosenMove;
+        var move, possibleMove;
+		var placesToMove = [];
+		var winRewards, drawRewards, lossRewards;
+		var maxReward = 0;
         if(memory){
+			console.debug('pattern ' + pattern + ' known');
             //structure:
             //model.patternRecognition[pattern] = {
             //  numTimesExploited: 0,
@@ -235,177 +239,112 @@ function doAiMove(player, rival){
             //  possibleNextMoves: [{
             //    i: 0,
             //    j: 0,
-            //    numXWins: 0,
-            //    numOWins: 0,
-            //    numDraws: 0
+            //    xWinRewards: 0,
+            //    oWinRewards: 0,
+            //    drawRewards: 0
             //  }]
             //}
 
-            var totalNumOutcomes = 0;
             for(pnm = 0; pnm < memory.possibleNextMoves.length; pnm++){
-                var possibleMove = memory.possibleNextMoves[pnm];
-                totalNumOutcomes += possibleMove.numXWins;
-                totalNumOutcomes += possibleMove.numOWins;
-                totalNumOutcomes += possibleMove.numDraws;
-            }
-            for(pnm = 0; pnm < memory.possibleNextMoves.length; pnm++){
-                var possibleMove = memory.possibleNextMoves[pnm];
+                possibleMove = memory.possibleNextMoves[pnm];
                 if(!model.board[possibleMove.i][possibleMove.j].v){
-                    numWins = player === X ? possibleMove.numXWins : possibleMove.numOWins;
-                    numDraws = possibleMove.numDraws;
-                    numLosses = player === X ? possibleMove.numOWins : possibleMove.numXWins;
+                    winRewards = player === X ? possibleMove.xWinRewards : possibleMove.oWinRewards;
+                    drawRewards = possibleMove.drawRewards;
+                    lossRewards = player === X ? possibleMove.oWinRewards : possibleMove.xWinRewards;
 
-                    possibleMove.chanceOfWin = numWins / totalNumOutcomes;
-                    possibleMove.chanceOfDraw = numDraw / totalNumOutcomes;
-                    possibleMove.chanceOfLoss = numLosses / totalNumOutcomes;
-                }
+					move = {
+						winRewards: winRewards,
+						drawRewards: drawRewards,
+						lossRewards: lossRewards,
+						i: possibleMove.i,
+						j: possibleMove.j,
+					};
+					//TODO how to tune this function?
+					move.reward = (100*winRewards) + (1*drawRewards) - (100*lossRewards);
+
+					maxReward = Math.max(maxReward, move.reward);
+
+					placesToMove.push(move);
+
+					console.debug('possible known move: ' + JSON.stringify(move));
+				}
             }
 
-            memory.possibleNextMoves.sort(function(a, b){
-???
+			//add unknown places with a reward of 0, since its unknown. better to go there than a place which is known to lose.
+			var explore = (getRandomInt(0, 100) % (model.playAutonomously.active?2:10)) === 0; //TODO use function? 10% chance of exploring during normal game. otherwise 50% during autoplay
+			console.debug('explore: ' + explore + ", placesToMove.length=" + placesToMove.length);
+			if(placesToMove.length > 0){
+				model.currentPatternKnown = "Yes";
+				if(explore){
+					model.currentPatternKnown += ", but exploring";
+				}
+			}else {
+				model.currentPatternKnown = "No";
+			}
+			for(i = 0; i < model.board.length; i++){
+				for(j = 0; j < model.board[i].length; j++){
+					if(!model.board[i][j].v){
+						var found = false;
+						for(pnm = 0; pnm < placesToMove.length; pnm++){
+							if(placesToMove[pnm].i === i && 
+							   placesToMove[pnm].j === j){
+							   
+							   found = true;
+							   break;
+						   }
+						}
+						if(!found){
+							placesToMove.push({
+								untried: true,
+								winRewards: 0,
+								drawRewards: 0,
+								lossRewards: 0,
+								i: i,
+								j: j,
+								reward: explore ? getRandomInt(maxReward+1, maxReward+1000) : 0 //IF EXPLORING, then use a random reward which is MUCH higher than any other reward
+							});
+							console.debug('found unknown place to move: ' + JSON.stringify(placesToMove[placesToMove.length-1]));
+						}
+					}
+				}
+			}
+
+            placesToMove.sort(function(a, b){
+				return a.reward < b.reward;
             });
+            console.log("sorted places to move: " + JSON.stringify(placesToMove.map(function(e){return {i: e.i, j: e.j, r: e.reward};})));
 
-what we actually want to do here is to find a few places to avoid and then decide where to go based on win/draw chances.
-sort based on chance of losing. based on how many places we can go, decide how many to avoid.
-then based on whats left, decide where to go.
-BUT in chess a bad move doesnt necessarily mean an instant loss. you could checkmate ;-)
+			var indexToMove = explore ? getRandomInt(0, placesToMove.length) : 0;
+            console.log("using index: " + indexToMove + ". exploring? " + explore);
+			var placeToMove = placesToMove[indexToMove];
+			if(placeToMove.untried && !explore){
+				model.currentPatternKnown += "; never tried, better than losing";
+			}
 
-            //group by wins, draws losses
-            var placesToWin = [];
-            var placesToDraw = [];
-            var placesToLose = [];
-            for(pnm = 0; pnm < memory.possibleNextMoves.length; pnm++){
-                var possibleMove = memory.possibleNextMoves[pnm];
+			//TODO different logic: find a square where i have a move that won lots, otherwise a square that i have drawn lots, otherwise a square where i have a move that didnt lose
+			// somehow though, im not thinking right. its important that i also lost loads on a square. just because i won once, doesnt mean that the 150 losses are irelevant.
+			//so how do we choose a square to go to? probability?
+			//from square 0,0 i have won 3 times and lost 100
+			//from square 0,1 i have never one, but only lost once
+			//i dont really know enough about square 0,1 to say that its better. its less likely that i will lose (1 out of 101 or 1 out of 104 moves)
+			//at the same time, its more likely that i will win if i go to square 0,0 because there, three moves out of 104 won, compared to square 0,1 where its zero.
+			//exploration is important, as it will help me improve knowledge about untested squares. base exploration on where i have gone least.
+			//so how do i decide where to go now, based on the info above???
+			//
+			//    3/104=2.88% chance of win    |    |
+			//    100/104=96.2% chance of loss |    |
+			//    ---------------------------------------
+			//    0/104=0% win                 |    |
+			//    1/104=0.96% loss             |    |
+			//    ---------------------------------------
+			//                                 |    |
+			//
+			// so based on percentages based on total moves, we are most likely to lose. so lets avoid that.
+			// use exploration to increase wins!
+			//
 
-					//TODO different logic: find a square where i have a move that won lots, otherwise a square that i have drawn lots, otherwise a square where i have a move that didnt lose
-					// somehow though, im not thinking right. its important that i also lost loads on a square. just because i won once, doesnt mean that the 150 losses are irelevant.
-					//so how do we choose a square to go to? probability?
-					//from square 0,0 i have won 3 times and lost 100
-					//from square 0,1 i have never one, but only lost once
-					//i dont really know enough about square 0,1 to say that its better. its less likely that i will lose (1 out of 101 or 1 out of 104 moves)
-					//at the same time, its more likely that i will win if i go to square 0,0 because there, three moves out of 104 won, compared to square 0,1 where its zero.
-					//exploration is important, as it will help me improve knowledge about untested squares. base exploration on where i have gone least.
-					//so how do i decide where to go now, based on the info above???
-					//
-					//    3/104=2.88% chance of win    |    |
-					//    100/104=96.2% chance of loss |    |
-					//    ---------------------------------------
-					//    0/104=0% win                 |    |
-					//    1/104=0.96% loss             |    |
-					//    ---------------------------------------
-					//                                 |    |
-					//
-					// so based on percentages based on total moves, we are most likely to lose. so lets avoid that.
-					// use exploration to increase wins!
-					//
-                    if(numWins){
-                        placesToWin.push(possibleMove);
-                    }
-					if(numDraws){
-                        placesToDraw.push(possibleMove);
-                    }
-					if(numLosses){
-                        placesToLose.push(possibleMove);
-                    }
-                }else{
-                    //ignore, because the space isnt free
-                }
-            }
-
-            // /////////////////////////////////////////////////////////////////////////////////////
-            // try and win, else draw, else avoid losing.
-            // /////////////////////////////////////////////////////////////////////////////////////
-
-            // ////////////////
-            // try and win, as fast as possible
-            // ////////////////
-
-            placesToWin.sort(function(a, b){
-                if(player === X){
-                    return a.numXWins > b.numXWins;
-                }else{
-                    return a.numOWins > b.numOWins;
-                }
-            });
-            console.log("places to win: " + JSON.stringify(placesToWin.map(function(e){return {i: e.i, j: e.j, w: (player===X?e.numXWins:e.numOWins)};})));
-            for(p = 0; p < placesToWin.length; p++){
-                var placeToWin = placesToWin[p];
-                console.log("selecting cell based on previous win");
-                selectCell(placeToWin.i, placeToWin.j, player);
-                model.currentPatternKnown = "Yes, won";
-                return;
-            }
-
-            // ////////////////
-            // try and draw
-            // ////////////////
-
-            placesToDraw.sort(function(a, b){
-                return a.numDraws > b.numDraws;
-            });
-            console.log("places to draw: " + JSON.stringify(placesToDraw.map(function(e){return {i: e.i, j: e.j};})));
-            for(p = 0; p < placesToDraw.length; p++){
-                var placeToDraw = placesToDraw[p];
-                console.log("selecting cell based on previous draw");
-                selectCell(placeToDraw.i, placeToDraw.j, player);
-                model.currentPatternKnown = "Yes, drew";
-                return;
-            }
-
-
-            // ////////////////
-            // dont lose!
-            // ////////////////
-            placesToLose.sort(function(a, b){
-                if(player === X){
-                    return a.numOWins > b.numOWins;
-                }else{
-                    return a.numXWins > b.numXWins;
-                }
-            });
-            console.log("places to lose: " + JSON.stringify(placesToLose.map(function(e){return {i: e.i, j: e.j, w: (player ===X?e.numOWins:e.numXWins)};})));
-            if(placesToLose.length){
-                var boardWithPlacesNotToGo = buildEmtpyBoard();
-                for(i = 0; i < model.board.length; i++){
-                    for(j = 0; j < model.board[i].length; j++){
-                        var placesToLoseContainsCurrentCell = false;
-                        for(k = 0; k < placesToLose.length; k++){
-                            var placeToLose = placesToLose[k];
-                            if(i === placeToLose.i && j === placeToLose.j){
-                                placesToLoseContainsCurrentCell = true;
-                                break;
-                            }
-                        }
-                        if(placesToLoseContainsCurrentCell){
-                            boardWithPlacesNotToGo[i][j].doNotGoHere = true;
-                        }
-                    }
-                }
-
-                var possibleCellsToGoTo = [];
-                var cell;
-                for(i = 0; i < model.board.length; i++){
-                    for(j = 0; j < model.board[i].length; j++){
-                        cell = boardWithPlacesNotToGo[i][j];
-                        if(cell.doNotGoHere){
-                            console.log("places not to go: " + i + "," + j);
-                        }else if(!model.board[i][j].v){
-                            possibleCellsToGoTo.push(cell);
-                        }
-                    }
-                }
-
-                console.log("possible cells to go to: " + JSON.stringify(possibleCellsToGoTo.map(function(e){return {i: e.i, j: e.j};})));
-                if(possibleCellsToGoTo.length){
-                    //now choose a random cell to go to
-                    var index = getRandomInt(0, possibleCellsToGoTo.length);
-                    cell = possibleCellsToGoTo[index];
-                    console.log("selecting cell based on previous losses");
-                    selectCell(cell.i, cell.j, player);
-                    model.currentPatternKnown = "Yes, lost";
-                    return;
-                }
-            }
+			selectCell(placeToMove.i, placeToMove.j, player);
+			return;
         }
 	}
 
@@ -559,10 +498,16 @@ function handleEnd(){
     var result = model.draw ? DRAW : model.winner;
     var recreatedBoard = buildEmtpyBoard();
     var pattern = "";
-    var memory;
-    for(h = 0; h < model.history.length; h++){
-        var move = model.history[h];
-        recreatedBoard[move.i][move.j].v = move.v;
+    var memory, move;
+	var uniqueGameKey = "";
+    for(h = -1; h < model.history.length; h++){
+		if(h === -1){
+			//add an empty board at the start, so the AI works out where good starting moves are
+		}else{
+			move = model.history[h];
+			uniqueGameKey += move.i + "" + move.j + "" + move.v + "|";
+			recreatedBoard[move.i][move.j].v = move.v;
+		}
         pattern = buildPattern(recreatedBoard);
         memory = model.patternRecognition[pattern];
         if(!memory){
@@ -591,18 +536,19 @@ function handleEnd(){
                     {
                         i: model.history[h+1].i,
                         j: model.history[h+1].j,
-                        numXWins: 0,
-                        numOWins: 0,
-                        numDraws: 0
+                        xWinRewards: 0,
+                        oWinRewards: 0,
+                        drawRewards: 0
                     }
                 );
             }
+			var reward = getReward(model.history.length);
             if(result === X) {
-                memory.possibleNextMoves[pnm].numXWins++;
+                memory.possibleNextMoves[pnm].xWinRewards += reward;
             }else if(result === O){
-                memory.possibleNextMoves[pnm].numOWins++;
+                memory.possibleNextMoves[pnm].oWinRewards += reward;
             }else{
-                memory.possibleNextMoves[pnm].numDraws++;
+                memory.possibleNextMoves[pnm].drawRewards += reward;
             }
         }
     }
@@ -614,6 +560,40 @@ function handleEnd(){
     }else{
         model.stats.draws++;
     }
+	
+	var ug = model.uniqueGames[uniqueGameKey];
+	if(!ug){
+		model.uniqueGames[uniqueGameKey] = 0;
+	}
+	model.uniqueGames[uniqueGameKey] ++;
+	
+	var totalUniqueGames = 0;
+	for(key in model.uniqueGames){
+		totalUniqueGames++;
+	}
+	console.log("Unique games: " + totalUniqueGames);
+	model.totalUniqueGames = totalUniqueGames;
+}
+
+/**
+ * we want to reward MORE for quicker wins/losses
+ *
+ * shorter games reward more, so that we avoid instant losses and take advantage of instant wins.
+ */
+function getReward(gameLength){
+	//TODO this can also be tuned
+	switch(gameLength) {
+		case 9:
+			return 1;
+		case 8:
+			return 2;
+		case 7:
+			return 4;
+		case 6:
+			return 8;
+		default:
+			return 16;
+	}
 }
 
 function buildEmtpyBoard() {
@@ -694,6 +674,7 @@ function test(){
     // RESET MODEL READY TO PLAY AND LEARN!!!
     model.patternRecognition = {};
     model.totalGames = 0;
+	model.uniqueGames = {};
 }
 
 function assert(b, message){
@@ -751,6 +732,7 @@ function buildModel(){
     model.patternRecognition = {};
 
     model.totalGames = 0;
+	model.uniqueGames = {};
 
     resetStats();
 }
@@ -832,7 +814,8 @@ function render(){
         model.clear.x + 6, model.clear.y + 75);
     ctx.strokeText("Draws: " + model.stats.draws, model.clear.x + 6, model.clear.y + 90);
     ctx.strokeText("Total games played: " + model.totalGames, model.clear.x + 6, model.clear.y + 105);
-    ctx.strokeText("Pattern known? " + model.currentPatternKnown, model.clear.x + 6, model.clear.y + 120);
+    ctx.strokeText("Unique games played: " + model.totalUniqueGames, model.clear.x + 6, model.clear.y + 120);
+    ctx.strokeText("Pattern known? " + model.currentPatternKnown, model.clear.x + 6, model.clear.y + 135);
 
     ctx.strokeText("Tic Tac Toe", 100, 20);
     ctx.strokeText("X starts", 100, 35);
