@@ -155,11 +155,12 @@ function toggleUseExploring(){
 function autoPlay(){
     if(model.isLearning){
         //if(model.totalUniqueGames > 200){
-        if(model.totalGames > 1000){
+        if(model.totalGames >= 2000){
             model.isLearning = false;
             toggleAuto();
             toggleWhoPlaysWhat();
             toggleUseExploring(); //turn it off, to make it look better for users
+            resetStats();
             clear();
             render();
             document.getElementById("learning").style.display = "none";
@@ -926,6 +927,7 @@ function render(){
 }
 
 
+
     </script>
     <style>
 body {
@@ -939,15 +941,17 @@ canvas {
 }
 
 
+
     </style>
 </head>
 <body onload="init();">
 <canvas id="canvas"></canvas>
-<div id="learning" style="position: fixed; width: 100%; height: 100%; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.2); z-index: 2; font-size:32px; text-align: center;">
+<div id="learning"
+     style="position: fixed; width: 100%; height: 100%; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.2); z-index: 2; font-size:32px; text-align: center;">
     <br>
     <br>
     <br>
-    learning... please give me a few seconds...
+    learning... please give me a minute...
 </div>
 </body>
 </html>
