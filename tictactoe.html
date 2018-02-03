@@ -33,9 +33,7 @@ after a number of goes, it learns that nowhere is good for the first move. then 
 eventually it will draw, and will learn how to. thats the plan. lets test it!
 */
 
-//TODO add exploration: https://en.wikipedia.org/wiki/Reinforcement_learning => exploration vs exploitation of known outcomes
-        //  numTimesExploited: 0,
-        //  numTimesExplored: 0,
+//add exploration: https://en.wikipedia.org/wiki/Reinforcement_learning => exploration vs exploitation of known outcomes
 
 //TODO dont remove wins. rather cound wins draws losses and use it in the decision of where to go next. if you won more than you lost, it is a good move und umgekehrt.
 
@@ -79,6 +77,14 @@ function init(){
     resetStats();
 
     render();
+
+    learn();
+}
+
+function learn(){
+    model.isLearning = true;
+    toggleWhoPlaysWhat();
+    toggleAuto();
 }
 
 function click(e){
@@ -93,6 +99,8 @@ function click(e){
         render();
     }else if(isHit(e, model.playAutonomously)){
         toggleAuto();
+    }else if(isHit(e, model.useExploring)){
+        toggleUseExploring();
     }else if(isHit(e, model.whoPlaysWhat)){
         toggleWhoPlaysWhat();
     } else if(isNotFinished()){
@@ -140,7 +148,23 @@ function toggleAuto(){
     autoPlay();
 }
 
+function toggleUseExploring(){
+    model.useExploring.active = !model.useExploring.active;
+}
+
 function autoPlay(){
+    if(model.isLearning){
+        //if(model.totalUniqueGames > 200){
+        if(model.totalGames > 1000){
+            model.isLearning = false;
+            toggleAuto();
+            toggleWhoPlaysWhat();
+            toggleUseExploring(); //turn it off, to make it look better for users
+            clear();
+            render();
+            document.getElementById("learning").style.display = "none";
+        }
+    }
     if(model.playAutonomously.active){
         if(isFinished()){
             clear();
@@ -167,62 +191,23 @@ function getRandomInt(min, max) {
 /** this is where the heavy lifting is done. */
 function doAiMove(player, rival){
 
-	if(model.useInstantWinLossChecks || (model.playAutonomously.active && player === HUMAN)){ //train the AI against something a little more intelligent so it isnt learning to beat a monkey
-		// ////////////////////////////
-		// search for an instant win
-		// ////////////////////////////
-		// copy board
-		var copyOfBoard = buildEmtpyBoard();
-		for(i = 0; i < model.board.length; i++){
-			for(j = 0; j < model.board[i].length; j++){
-				copyOfBoard[i][j].v = model.board[i][j].v;
-			}
-		}
-		// attempt all places that are free
-		for(i = 0; i < model.board.length; i++){
-			for(j = 0; j < model.board[i].length; j++){
-				if(!copyOfBoard[i][j].v){
-					copyOfBoard[i][j].v = player;
-					if(checkFinished(copyOfBoard) === player){
-						console.log("found instant win at " + i + "," + j);
-						selectCell(i, j, player);
-						model.currentPatternKnown = "No, but found an instant win";
-						return;
-					}else{
-						//reset and try next free cell
-						delete copyOfBoard[i][j].v;
-					}
-				}
-			}
-		}
-
-		// ////////////////////////////
-		// avoid instant loss
-		// ////////////////////////////
-		for(i = 0; i < model.board.length; i++){
-			for(j = 0; j < model.board[i].length; j++){
-				if(!copyOfBoard[i][j].v){
-					copyOfBoard[i][j].v = rival;
-					if(checkFinished(copyOfBoard) === rival){
-						console.log("found instant lose at " + i + "," + j);
-						selectCell(i, j, player);
-						model.currentPatternKnown = "No, but avoiding loss";
-						return;
-					}else{
-						//reset and try next free cell
-						delete copyOfBoard[i][j].v;
-					}
-				}
-			}
-		}
-
-		// ////////////////////////////////////////////////////
-		// No instant win, so use the strategy to get a win
-		// ////////////////////////////////////////////////////
+	if(model.useInstantWinLossChecks){ // || (model.playAutonomously.active && player === HUMAN)){ //train the AI against something a little more intelligent so it isnt learning to beat a monkey
+	    if(doInstantWinMove(player, rival)) {
+	        return;
+	    }
 	}
 
+    // ////////////////////////////////////////////////////
+    // No instant win, so use the strategy to get a win
+    // ////////////////////////////////////////////////////
+
     model.currentPatternKnown = "Yes";
-    if(model.strategy === 'patternRecognition'){
+    if(model.playAutonomously.active && player === HUMAN) {
+        //use well known moves to try and win. see if we can teach the AI to use them
+        if(playLikeAnt(player, rival)){
+            return;
+        }
+    } else if(model.strategy === 'patternRecognition'){
         // have we seen this pattern? if so, and we had a winning solution, repeat it
         var pattern = buildPattern(model.board);
         var memory = model.patternRecognition[pattern];
@@ -234,8 +219,6 @@ function doAiMove(player, rival){
 			console.debug('pattern ' + pattern + ' known');
             //structure:
             //model.patternRecognition[pattern] = {
-            //  numTimesExploited: 0,
-            //  numTimesExplored: 0,
             //  possibleNextMoves: [{
             //    i: 0,
             //    j: 0,
@@ -260,7 +243,11 @@ function doAiMove(player, rival){
 						j: possibleMove.j,
 					};
 					//TODO how to tune this function?
-					move.reward = (100*winRewards) + (1*drawRewards) - (100*lossRewards);
+					var total = winRewards + drawRewards + lossRewards;
+
+					//divide by total, because otherwise it seems to learn that one place is GREAT and doesnt give other ones a chance.
+					//this way, we work out the win ratio regardless of how often its been played. so its normalised in comparison to the others.
+					move.reward = (100*(winRewards/total)) + (10*(drawRewards/total)) + (-1*(lossRewards/total));
 
 					maxReward = Math.max(maxReward, move.reward);
 
@@ -271,8 +258,30 @@ function doAiMove(player, rival){
             }
 
 			//add unknown places with a reward of 0, since its unknown. better to go there than a place which is known to lose.
-			var explore = (getRandomInt(0, 100) % (model.playAutonomously.active?2:10)) === 0; //TODO use function? 10% chance of exploring during normal game. otherwise 50% during autoplay
+			//explore based on ratio of total games to total unique games. eg 3 total vs 1 unique: explore 33%.
+			//eg 100 total vs 1 unique: explore 1%
+            var explore = false;
+			if(model.useExploring.active) {
+                // always reducing chance of exploration:
+                // total games 5, 100% chance of exploration
+                // total games 99, 100% chance of exploration
+                // total games 101, 50% chance of exploration
+                // total games 201, 33% chance of exploration
+                // total games 301, 25% chance of exploration
+                // total games 1000, 10% chance of exploration
+                // total games 10000, 1% chance of exploration
+                //var exploreRatio = Math.ceil(model.totalGames/100);
+                var exploreRatio = Math.ceil(model.totalUniqueGames/30); //300 unique => 1% exploration
+                console.debug("explore ratio: 1:" + exploreRatio);
+
+                explore = getRandomInt(0, exploreRatio) === 0;
+                //explore = (getRandomInt(0, 100) % (10)) === 0; //TODO use function? 10% chance of exploring during normal game. otherwise 50% during autoplay
+            }
 			console.debug('explore: ' + explore + ", placesToMove.length=" + placesToMove.length);
+			if(explore) {
+				model.numExplorations++;
+			}
+
 			if(placesToMove.length > 0){
 				model.currentPatternKnown = "Yes";
 				if(explore){
@@ -358,6 +367,78 @@ function doAiMove(player, rival){
     moveRandomly(player);
 }
 
+function doInstantWinMove(player, rival) {
+    // ////////////////////////////
+    // search for an instant win
+    // ////////////////////////////
+    // copy board
+    var copyOfBoard = buildEmtpyBoard();
+    for(i = 0; i < model.board.length; i++){
+        for(j = 0; j < model.board[i].length; j++){
+            copyOfBoard[i][j].v = model.board[i][j].v;
+        }
+    }
+    // attempt all places that are free
+    for(i = 0; i < model.board.length; i++){
+        for(j = 0; j < model.board[i].length; j++){
+            if(!copyOfBoard[i][j].v){
+                copyOfBoard[i][j].v = player;
+                if(checkFinished(copyOfBoard) === player){
+                    console.log("found instant win at " + i + "," + j);
+                    selectCell(i, j, player);
+                    model.currentPatternKnown = "No, but found an instant win";
+                    return true;
+                }else{
+                    //reset and try next free cell
+                    delete copyOfBoard[i][j].v;
+                }
+            }
+        }
+    }
+
+    // ////////////////////////////
+    // avoid instant loss
+    // ////////////////////////////
+    for(i = 0; i < model.board.length; i++){
+        for(j = 0; j < model.board[i].length; j++){
+            if(!copyOfBoard[i][j].v){
+                copyOfBoard[i][j].v = rival;
+                if(checkFinished(copyOfBoard) === rival){
+                    console.log("found instant lose at " + i + "," + j);
+                    selectCell(i, j, player);
+                    model.currentPatternKnown = "No, but avoiding loss";
+                    return true;
+                }else{
+                    //reset and try next free cell
+                    delete copyOfBoard[i][j].v;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+var antMoves = {
+    "---|---|---|": {i: 1, j: 1},
+
+    "-O-|-X-|---|": {i: 1, j: 0},
+    "---|OX-|---|": {i: 0, j: 1},
+    "---|-XO|---|": {i: 0, j: 1},
+    "---|-X-|-O-|": {i: 1, j: 0},
+};
+
+function playLikeAnt(player, rival) {
+    var pattern = buildPattern(model.board);
+    var move = antMoves[pattern];
+    if(move) {
+        model.currentPatternKnown = "Yes, moving like Ant";
+        selectCell(move.i, move.j, player);
+        return true;
+    } else {
+        return doInstantWinMove(player, rival);
+    }
+}
+
 function buildPattern(board) {
     var pattern = "";
     var v;
@@ -367,8 +448,9 @@ function buildPattern(board) {
             if(!v){
                 v = "-";
             }
-            pattern += v + "|";
+            pattern += v;
         }
+        pattern += "|";
     }
     return pattern;
 }
@@ -412,6 +494,9 @@ function moveDeterministically(player) {
 
 function selectCell(i, j, v) {
     if(model.board[i][j].v) throw new Error("cell " + i + "," + j + " is already selected by " + model.board[i][j].v);
+    if(v === COMPUTER){
+        model.numAiMoves++;
+    }
     console.log("selecting cell " + i + "," + j + " for " + v);
     model.board[i][j].v = v;
     model.history.push({i: i, j:j, v: v});
@@ -512,9 +597,7 @@ function handleEnd(){
         memory = model.patternRecognition[pattern];
         if(!memory){
             memory = {
-                possibleNextMoves: [],
-                numTimesExploited: 0,
-                numTimesExplored: 0
+                possibleNextMoves: []
             };
             model.patternRecognition[pattern] = memory;
         }
@@ -671,10 +754,7 @@ function test(){
     assert(model.winner === X);
     clear();
 
-    // RESET MODEL READY TO PLAY AND LEARN!!!
-    model.patternRecognition = {};
-    model.totalGames = 0;
-	model.uniqueGames = {};
+	resetEverything();
 }
 
 function assert(b, message){
@@ -683,6 +763,22 @@ function assert(b, message){
         if(message) msg += ": " + message;
         throw new Error(msg);
     }
+}
+
+function resetEverything(){
+    //a place to store moves of the current game
+    model.history = [];
+
+    //a place to store pattern recognition memory
+    model.patternRecognition = {};
+
+    model.totalGames = 0;
+	model.uniqueGames = {};
+	model.totalUniqueGames = 0;
+	model.numExplorations = 0;
+    model.numAiMoves = 0;
+
+	resetStats();
 }
 
 function buildModel(){
@@ -725,16 +821,16 @@ function buildModel(){
         h: 20
     };
 
-    //a place to store moves of the current game
-    model.history = [];
+    //the useExploring button
+    model.useExploring = {
+        x: 380,
+        y: 80,
+        w: 60,
+        h: 20,
+        active: true
+    };
 
-    //a place to store pattern recognition memory
-    model.patternRecognition = {};
-
-    model.totalGames = 0;
-	model.uniqueGames = {};
-
-    resetStats();
+	resetEverything();
 }
 
 function resetStats(){
@@ -764,6 +860,7 @@ function clear(){
         COMPUTER = O;
         HUMAN = X;
     }
+	console.log("======== cleared ============");
 }
 
 function render(){
@@ -798,6 +895,9 @@ function render(){
     ctx.strokeRect(model.whoPlaysWhat.x, model.whoPlaysWhat.y, model.whoPlaysWhat.w, model.whoPlaysWhat.h);
     ctx.strokeText("swap roles", model.whoPlaysWhat.x + 6, model.whoPlaysWhat.y + 14);
 
+    ctx.strokeRect(model.useExploring.x, model.useExploring.y, model.useExploring.w, model.useExploring.h);
+    ctx.strokeText("explore", model.useExploring.x + 6, model.useExploring.y + 14);
+
     ctx.strokeStyle = "red";
     if(model.winner){
         ctx.strokeText("WON BY " + model.winner, model.clear.x + 6, model.clear.y + 40);
@@ -815,13 +915,16 @@ function render(){
     ctx.strokeText("Draws: " + model.stats.draws, model.clear.x + 6, model.clear.y + 90);
     ctx.strokeText("Total games played: " + model.totalGames, model.clear.x + 6, model.clear.y + 105);
     ctx.strokeText("Unique games played: " + model.totalUniqueGames, model.clear.x + 6, model.clear.y + 120);
-    ctx.strokeText("Pattern known? " + model.currentPatternKnown, model.clear.x + 6, model.clear.y + 135);
+    ctx.strokeText("Number of explorations: " + model.numExplorations + "; exploring enabled: " + model.useExploring.active, model.clear.x + 6, model.clear.y + 135);
+    ctx.strokeText("Number of AI moves: " + model.numAiMoves, model.clear.x + 6, model.clear.y + 150);
+    ctx.strokeText("Pattern known? " + model.currentPatternKnown, model.clear.x + 6, model.clear.y + 165);
 
     ctx.strokeText("Tic Tac Toe", 100, 20);
     ctx.strokeText("X starts", 100, 35);
     ctx.strokeText("You play '" + HUMAN + "', computer plays '" + COMPUTER + "'.", 100, 50);
     ctx.strokeText("As you play the computer will learn.", 100, 65);
 }
+
 
     </script>
     <style>
@@ -835,9 +938,16 @@ canvas {
     display: block;
 }
 
+
     </style>
 </head>
 <body onload="init();">
 <canvas id="canvas"></canvas>
+<div id="learning" style="position: fixed; width: 100%; height: 100%; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.2); z-index: 2; font-size:32px; text-align: center;">
+    <br>
+    <br>
+    <br>
+    learning... please give me a few seconds...
+</div>
 </body>
 </html>
