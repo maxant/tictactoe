@@ -101,6 +101,7 @@ function click(e){
         toggleAuto();
     }else if(isHit(e, model.useExploring)){
         toggleUseExploring();
+        render();
     }else if(isHit(e, model.whoPlaysWhat)){
         toggleWhoPlaysWhat();
     } else if(isNotFinished()){
