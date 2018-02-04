@@ -153,12 +153,16 @@ function toggleUseExploring(){
 }
 
 function autoPlay(){
-    if(model.isLearning){
-        //if(model.totalUniqueGames > 200){
+    if(model.isLearning && isFinished()){
+        if(model.totalGames % 100 === 0) {   // or model.totalUniqueGames > 200???
+            toggleWhoPlaysWhat();
+        }
         if(model.totalGames >= 2000){
             model.isLearning = false;
             toggleAuto();
-            toggleWhoPlaysWhat();
+            if(COMPUTER === O){
+                toggleWhoPlaysWhat();
+            }
             toggleUseExploring(); //turn it off, to make it look better for users
             resetStats();
             clear();
@@ -166,6 +170,7 @@ function autoPlay(){
             document.getElementById("learning").style.display = "none";
         }
     }
+
     if(model.playAutonomously.active){
         if(isFinished()){
             clear();
@@ -324,34 +329,21 @@ function doAiMove(player, rival){
             });
             console.log("sorted places to move: " + JSON.stringify(placesToMove.map(function(e){return {i: e.i, j: e.j, r: e.reward};})));
 
-			var indexToMove = explore ? getRandomInt(0, placesToMove.length) : 0;
+            //if exploring, go anywhere in the list of possible places.
+            //otherwise, select all those with the highest reward, and move randomly within that subset
+            if(!explore) {
+                placesToMove = placesToMove.filter(function(a){
+                    return a.reward === placesToMove[0].reward;
+                });
+                console.log("filtered places to move: " + JSON.stringify(placesToMove.map(function(e){return {i: e.i, j: e.j, r: e.reward};})));
+            }
+
+            var indexToMove = getRandomInt(0, placesToMove.length);
             console.log("using index: " + indexToMove + ". exploring? " + explore);
 			var placeToMove = placesToMove[indexToMove];
 			if(placeToMove.untried && !explore){
 				model.currentPatternKnown += "; never tried, better than losing";
 			}
-
-			//TODO different logic: find a square where i have a move that won lots, otherwise a square that i have drawn lots, otherwise a square where i have a move that didnt lose
-			// somehow though, im not thinking right. its important that i also lost loads on a square. just because i won once, doesnt mean that the 150 losses are irelevant.
-			//so how do we choose a square to go to? probability?
-			//from square 0,0 i have won 3 times and lost 100
-			//from square 0,1 i have never one, but only lost once
-			//i dont really know enough about square 0,1 to say that its better. its less likely that i will lose (1 out of 101 or 1 out of 104 moves)
-			//at the same time, its more likely that i will win if i go to square 0,0 because there, three moves out of 104 won, compared to square 0,1 where its zero.
-			//exploration is important, as it will help me improve knowledge about untested squares. base exploration on where i have gone least.
-			//so how do i decide where to go now, based on the info above???
-			//
-			//    3/104=2.88% chance of win    |    |
-			//    100/104=96.2% chance of loss |    |
-			//    ---------------------------------------
-			//    0/104=0% win                 |    |
-			//    1/104=0.96% loss             |    |
-			//    ---------------------------------------
-			//                                 |    |
-			//
-			// so based on percentages based on total moves, we are most likely to lose. so lets avoid that.
-			// use exploration to increase wins!
-			//
 
 			selectCell(placeToMove.i, placeToMove.j, player);
 			return;
@@ -928,6 +920,9 @@ function render(){
 
 
 
+
+
+
     </script>
     <style>
 body {
@@ -939,6 +934,9 @@ canvas {
     overflow: hidden;
     display: block;
 }
+
+
+
 
 
 
