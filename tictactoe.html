@@ -2,51 +2,6 @@
 <head>
     <script>
 
-//https://en.wikipedia.org/wiki/Tic-tac-toe
-// 26,830 possible games
-// if X starts, chances are 91 wins, 44 losses, 3 draws
-
-//X always starts => that way computer can use those games to learn from. eg user plays and wins.
-
-//try to win instantly: that way it doesnt need to have all possible games in memory
-//     but maybe only fall back to that if it cannot win based on memory?
-
-//its ok to use massive memory. why should machines be based on human learning?!
-
-//without the ai strategy, i can win 7/8 times if i start, because it doesnt know how to block starting in the middle or corners
-
-/*
-win from middle:
----  -O-  -O-                                                            -O-  -O-
--X-  -X-  -XX  at this stage, O is already being forced and controlled.  OXX  OXX now X has two winning moves: top left or top right. O losses.
----  ---  ---                                                            ---  --X
-the way to block winning from the middle is to move in a corner. outcome is always a draw i think.
-
-win from corners
-X--  X--  X--
----  ---  --- X now has three ways to win: middle middle or middle left or bottom middle
----  X--  X-X
-
-
-computer now learns against itself. after 500 moves its not clever enough to avoid losing to central start.
-after a number of goes, it learns that nowhere is good for the first move. then it starts learning that the second move is critical.
-eventually it will draw, and will learn how to. thats the plan. lets test it!
-*/
-
-//add exploration: https://en.wikipedia.org/wiki/Reinforcement_learning => exploration vs exploitation of known outcomes
-
-//TODO dont remove wins. rather cound wins draws losses and use it in the decision of where to go next. if you won more than you lost, it is a good move und umgekehrt.
-
-//TODO is it important how many times they won from the given position using a certain move? probably. esp if not playing random. so we should count how often they won for each move, and use that info together with which is the quickest move, to determine what the next move should be
-// => the reward depends not just on the win, but also on the move. can we say that?
-//TODO measure percentages after say 1000, 2000, and 5000 moves.  measure with instantWinLoss, without, and without strategy too.
-//TODO how many games are required before it learns enough to not require checking instant wins/losses?
-//TODO does it develop the strategy to go on the corners first, as your more likely to win? it should
-//     do, because it tries winning moves which come from shortest games...
-//TODO add different strategies?? add eg neural network?
-//TODO remove duplicates in history
-//TODO dont play against a random, play against itself! otherwise its not learning properly?
-
 var model = {};
 
 var O = "O";
@@ -68,9 +23,7 @@ function init(){
 	// ////////////////////
 	// configuration
 	// ////////////////////
-	model.strategy = 'patternRecognition';
-	//model.strategy = 'none'; see comment above. without a strategy, the computer doesnt learn to block humans who know about corners/middle
-	model.useInstantWinLossChecks = false; //markedly improves intelligence quickly.
+	model.useInstantWinLossChecks = false; //if true, markedly improves intelligence quickly. but it is cooler to learn this on its own!
 
     test();
     clear();
@@ -214,7 +167,14 @@ function doAiMove(player, rival){
         if(playLikeAnt(player, rival)){
             return;
         }
-    } else if(model.strategy === 'patternRecognition'){
+    } else {
+
+        // this is probably the action-value function Q(s, a) (https://en.wikipedia.org/wiki/Q-learning)
+        // which finds the best action based on previous rewards.
+        // it gives the expected utility of a given action a while in a given state s.
+        // the expected utility can be found in the attribute named "reward" in the objects contained
+        // in the placesToMove array.
+
         // have we seen this pattern? if so, and we had a winning solution, repeat it
         var pattern = buildPattern(model.board);
         var memory = model.patternRecognition[pattern];
@@ -280,8 +240,7 @@ function doAiMove(player, rival){
                 //var exploreRatio = Math.ceil(model.totalGames/100);
                 var exploreRatio = Math.ceil(model.totalUniqueGames/30); //300 unique => 1% exploration
                 console.debug("explore ratio: 1:" + exploreRatio);
-
-                explore = getRandomInt(0, exploreRatio) === 0;
+                explore = getRandomInt(0, exploreRatio > 1000 ? exploreRatio : 2) === 0;
                 //explore = (getRandomInt(0, 100) % (10)) === 0; //TODO use function? 10% chance of exploring during normal game. otherwise 50% during autoplay
             }
 			console.debug('explore: ' + explore + ", placesToMove.length=" + placesToMove.length);
