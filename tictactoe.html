@@ -169,156 +169,192 @@ function doAiMove(player, rival){
         }
     } else {
 
-        // this is probably the action-value function Q(s, a) (https://en.wikipedia.org/wiki/Q-learning)
-        // which finds the best action based on previous rewards.
-        // it gives the expected utility of a given action a while in a given state s.
-        // the expected utility can be found in the attribute named "reward" in the objects contained
-        // in the placesToMove array.
+        var move, possibleMove;
 
         // have we seen this pattern? if so, and we had a winning solution, repeat it
         var pattern = buildPattern(model.board);
-        var memory = model.patternRecognition[pattern];
-        var move, possibleMove;
-		var placesToMove = [];
-		var winRewards, drawRewards, lossRewards;
-		var maxReward = 0;
+        console.debug('pattern ' + pattern + ' known');
+
+        // state, aka memory
+        let memory = model.patternRecognition[pattern];
         if(memory){
-			console.debug('pattern ' + pattern + ' known');
-            //structure:
-            //model.patternRecognition[pattern] = {
-            //  possibleNextMoves: [{
-            //    i: 0,
-            //    j: 0,
-            //    xWinRewards: 0,
-            //    oWinRewards: 0,
-            //    drawRewards: 0
-            //  }]
-            //}
 
-            for(pnm = 0; pnm < memory.possibleNextMoves.length; pnm++){
-                possibleMove = memory.possibleNextMoves[pnm];
-                if(!model.board[possibleMove.i][possibleMove.j].v){
-                    winRewards = player === X ? possibleMove.xWinRewards : possibleMove.oWinRewards;
-                    drawRewards = possibleMove.drawRewards;
-                    lossRewards = player === X ? possibleMove.oWinRewards : possibleMove.xWinRewards;
+            let explore = decideWhetherToExplore();
 
-					move = {
-						winRewards: winRewards,
-						drawRewards: drawRewards,
-						lossRewards: lossRewards,
-						i: possibleMove.i,
-						j: possibleMove.j,
-					};
-					//TODO how to tune this function?
-					var total = winRewards + drawRewards + lossRewards;
+            // determine Q i.e. a function based on state and actions
+            // placesToMove contains all possible actions and maps those actions to known rewards. the policy can
+            // use it to select the "best" move
+            let placesToMove = determinePlacesToMove(explore, memory, player);
 
-					//divide by total, because otherwise it seems to learn that one place is GREAT and doesnt give other ones a chance.
-					//this way, we work out the win ratio regardless of how often its been played. so its normalised in comparison to the others.
-					move.reward = (100*(winRewards/total)) + (10*(drawRewards/total)) + (-1*(lossRewards/total));
+            // select based on policy
+            let placeToMove = getPlaceToMoveBasedOnPolicy(placesToMove, explore);
 
-					maxReward = Math.max(maxReward, move.reward);
-
-					placesToMove.push(move);
-
-					console.debug('possible known move: ' + JSON.stringify(move));
-				}
+            if(placeToMove.untried && !explore){
+                model.currentPatternKnown += "; never tried, better than losing";
             }
 
-			//add unknown places with a reward of 0, since its unknown. better to go there than a place which is known to lose.
-			//explore based on ratio of total games to total unique games. eg 3 total vs 1 unique: explore 33%.
-			//eg 100 total vs 1 unique: explore 1%
-            var explore = false;
-			if(model.useExploring.active) {
-                // always reducing chance of exploration:
-                // total games 5, 100% chance of exploration
-                // total games 99, 100% chance of exploration
-                // total games 101, 50% chance of exploration
-                // total games 201, 33% chance of exploration
-                // total games 301, 25% chance of exploration
-                // total games 1000, 10% chance of exploration
-                // total games 10000, 1% chance of exploration
-                //var exploreRatio = Math.ceil(model.totalGames/100);
-                var exploreRatio = Math.ceil(model.totalUniqueGames/30); //300 unique => 1% exploration
-                console.debug("explore ratio: 1:" + exploreRatio);
-                explore = getRandomInt(0, exploreRatio > 1000 ? exploreRatio : 2) === 0;
-                //explore = (getRandomInt(0, 100) % (10)) === 0; //TODO use function? 10% chance of exploring during normal game. otherwise 50% during autoplay
-            }
-			console.debug('explore: ' + explore + ", placesToMove.length=" + placesToMove.length);
-			if(explore) {
-				model.numExplorations++;
-			}
-
-			if(placesToMove.length > 0){
-				model.currentPatternKnown = "Yes";
-				if(explore){
-					model.currentPatternKnown += ", but exploring";
-				}
-			}else {
-				model.currentPatternKnown = "No";
-			}
-			for(i = 0; i < model.board.length; i++){
-				for(j = 0; j < model.board[i].length; j++){
-					if(!model.board[i][j].v){
-						var found = false;
-						for(pnm = 0; pnm < placesToMove.length; pnm++){
-							if(placesToMove[pnm].i === i && 
-							   placesToMove[pnm].j === j){
-							   
-							   found = true;
-							   break;
-						   }
-						}
-						if(!found){
-							placesToMove.push({
-								untried: true,
-								winRewards: 0,
-								drawRewards: 0,
-								lossRewards: 0,
-								i: i,
-								j: j,
-								reward: explore ? getRandomInt(maxReward+1, maxReward+1000) : 0 //IF EXPLORING, then use a random reward which is MUCH higher than any other reward
-							});
-							console.debug('found unknown place to move: ' + JSON.stringify(placesToMove[placesToMove.length-1]));
-						}
-					}
-				}
-			}
-
-            placesToMove.sort(function(a, b){
-				return a.reward < b.reward;
-            });
-            console.log("sorted places to move: " + JSON.stringify(placesToMove.map(function(e){return {i: e.i, j: e.j, r: e.reward};})));
-
-            //if exploring, go anywhere in the list of possible places.
-            //otherwise, select all those with the highest reward, and move randomly within that subset
-            if(!explore) {
-                placesToMove = placesToMove.filter(function(a){
-                    return a.reward === placesToMove[0].reward;
-                });
-                console.log("filtered places to move: " + JSON.stringify(placesToMove.map(function(e){return {i: e.i, j: e.j, r: e.reward};})));
-            }
-
-            var indexToMove = getRandomInt(0, placesToMove.length);
-            console.log("using index: " + indexToMove + ". exploring? " + explore);
-			var placeToMove = placesToMove[indexToMove];
-			if(placeToMove.untried && !explore){
-				model.currentPatternKnown += "; never tried, better than losing";
-			}
-
-			selectCell(placeToMove.i, placeToMove.j, player);
-			return;
+            selectCell(placeToMove.i, placeToMove.j, player);
+            return;
         }
 	}
 
     model.currentPatternKnown = "No";
 
-    //TODO use for testing:
-    //moveDeterministically(player);
-    //console.log("selecting cell deterministically");
-    //TODO use for real:
     console.log("selecting cell randomly");
     moveRandomly(player);
 }
+
+/** *******************************************************************************************************
+ * https://en.wikipedia.org/wiki/Q-learning:
+ *  "A policy pi, is a rule that the agent follows in selecting actions, given the state it is in.
+ *   When such an action-value function is learned, the optimal policy can be constructed by selecting
+ *   the action with the highest value in each state."
+ * The highest value is based on the rewards which were learned from previous games
+ ******************************************************************************************************* */
+function getPlaceToMoveBasedOnPolicy(placesToMove, explore) {
+    placesToMove.sort(function(a, b){
+        return a.reward < b.reward;
+    });
+    console.log("sorted places to move: " + JSON.stringify(placesToMove.map(function(e){return {i: e.i, j: e.j, r: e.reward};})));
+
+    //if exploring, all unknown places were given higher rewards than known moves, so they are now at the front
+    //of the list. if all places are known, then exploring doesn't really make sense? actually it does, because
+    //maybe last time we lost with a certain move, but this time we can win! so that means there is no point
+    //in setting the reward of unknown places.
+    //otherwise, select all those with the highest reward, and move randomly within that subset
+    if(!explore) {
+        placesToMove = placesToMove.filter(function(a){
+            return a.reward === placesToMove[0].reward;
+        });
+        console.log("filtered places to move: " + JSON.stringify(placesToMove.map(function(e){return {i: e.i, j: e.j, r: e.reward};})));
+    }
+    let indexToMove = getRandomInt(0, placesToMove.length);
+    console.log("using index: " + indexToMove + ". exploring? " + explore);
+    return placesToMove[indexToMove];
+}
+
+
+function decideWhetherToExplore() {
+
+    //TODO tidy up
+
+    //explore based on ratio of total games to total unique games. eg 3 total vs 1 unique: explore 33%.
+    //eg 100 total vs 1 unique: explore 1%
+    var explore = false;
+    if(model.useExploring.active) {
+        // always reducing chance of exploration:
+        // total games 5, 100% chance of exploration
+        // total games 99, 100% chance of exploration
+        // total games 101, 50% chance of exploration
+        // total games 201, 33% chance of exploration
+        // total games 301, 25% chance of exploration
+        // total games 1000, 10% chance of exploration
+        // total games 10000, 1% chance of exploration
+        //var exploreRatio = Math.ceil(model.totalGames/100);
+        var exploreRatio = Math.ceil(model.totalUniqueGames/30); //300 unique => 1% exploration
+        console.debug("explore ratio: 1:" + exploreRatio);
+        explore = getRandomInt(0, exploreRatio > 1000 ? exploreRatio : 2) === 0;
+        //explore = (getRandomInt(0, 100) % (10)) === 0; //TODO use function? 10% chance of exploring during normal game. otherwise 50% during autoplay
+    }
+    console.debug('explore: ' + explore);
+    if(explore) {
+        model.numExplorations++;
+    }
+
+    return explore;
+}
+
+/** *******************************************************************************************************
+ * placesToMove is effectively the action-value function Q(s, a) which gives the expected utility of a
+ * given action a while in a given state s (https://en.wikipedia.org/wiki/Q-learning).
+ * so we can use it to find the best action based on previous rewards.
+ * since we want to move to the place with the highest reward, we sort the values by reward.
+ ******************************************************************************************************** */
+function determinePlacesToMove(explore, memory, player) {
+
+    var placesToMove = [];
+    var winRewards, drawRewards, lossRewards;
+
+    //structure:
+    //memory = {
+    //  possibleNextMoves: [{
+    //    i: 0,
+    //    j: 0,
+    //    xWinRewards: 0,
+    //    oWinRewards: 0,
+    //    drawRewards: 0
+    //  }]
+    //}
+
+    for(pnm = 0; pnm < memory.possibleNextMoves.length; pnm++){
+        possibleMove = memory.possibleNextMoves[pnm];
+        if(!model.board[possibleMove.i][possibleMove.j].v){
+            winRewards = player === X ? possibleMove.xWinRewards : possibleMove.oWinRewards;
+            drawRewards = possibleMove.drawRewards;
+            lossRewards = player === X ? possibleMove.oWinRewards : possibleMove.xWinRewards;
+
+            move = {
+                winRewards: winRewards,
+                drawRewards: drawRewards,
+                lossRewards: lossRewards,
+                i: possibleMove.i,
+                j: possibleMove.j,
+            };
+            //TODO how to tune this function?
+            var total = winRewards + drawRewards + lossRewards;
+
+            //divide by total, because otherwise it seems to learn that one place is GREAT and doesnt give other ones a chance.
+            //this way, we work out the win ratio regardless of how often its been played. so its normalised in comparison to the others.
+            move.reward = (100*(winRewards/total)) + (10*(drawRewards/total)) + (-1*(lossRewards/total));
+
+            placesToMove.push(move);
+
+            console.debug('possible known move: ' + JSON.stringify(move));
+        }
+    }
+
+    // add some logging info for later...
+    if(placesToMove.length > 0){
+        model.currentPatternKnown = "Yes";
+        if(explore){
+            model.currentPatternKnown += ", but exploring";
+        }
+    }else {
+        model.currentPatternKnown = "No";
+    }
+
+    //finally add unknown places with a reward of 0, since its unknown. better to go there than a place which is known to lose.
+    for(i = 0; i < model.board.length; i++){
+        for(j = 0; j < model.board[i].length; j++){
+            if(!model.board[i][j].v){
+                var found = false;
+                for(pnm = 0; pnm < placesToMove.length; pnm++){
+                    if(placesToMove[pnm].i === i &&
+                       placesToMove[pnm].j === j){
+
+                       found = true;
+                       break;
+                   }
+                }
+                if(!found){
+                    placesToMove.push({
+                        untried: true,
+                        winRewards: 0,
+                        drawRewards: 0,
+                        lossRewards: 0,
+                        i: i,
+                        j: j,
+                        reward: 0
+                    });
+                    console.debug('found unknown place to move: ' + JSON.stringify(placesToMove[placesToMove.length-1]));
+                }
+            }
+        }
+    }
+    return placesToMove;
+}
+
+
 
 function doInstantWinMove(player, rival) {
     // ////////////////////////////
@@ -371,6 +407,7 @@ function doInstantWinMove(player, rival) {
     return false;
 }
 
+// ant moves are what the author does to try and win, ie start in the middle
 var antMoves = {
     "---|---|---|": {i: 1, j: 1},
 
