@@ -1,29 +1,17 @@
 //https://medium.freecodecamp.org/how-to-create-a-neural-network-in-javascript-in-only-30-lines-of-code-343dafc50d49
-const { Layer, Network } = window.synaptic;
-var inputLayerO = new Layer(9); //O=-1, -=0, X=1
-var hiddenLayerO = new Layer(9); //TODO tune this
-var outputLayerO = new Layer(9); //where to move to; -1 is best move for O, 1 is best move for X. raster, ie 0=(0,0), 4=(1,1), etc.
-var inputLayerX = new Layer(9); //O=-1, -=0, X=1
-var hiddenLayerX = new Layer(9); //TODO tune this
-var outputLayerX = new Layer(9); //where to move to; -1 is best move for O, 1 is best move for X. raster, ie 0=(0,0), 4=(1,1), etc.
+const { Layer, Network, Trainer, Architect } = window.synaptic;
 
-inputLayerO.project(hiddenLayerO);
-hiddenLayerO.project(outputLayerO);
-inputLayerX.project(hiddenLayerX);
-hiddenLayerX.project(outputLayerX);
-var myNetworkO = new Network({
- input: inputLayerO,
- hidden: [hiddenLayerO],
- output: outputLayerO
-});
-var myNetworkX = new Network({
- input: inputLayerX,
- hidden: [hiddenLayerX],
- output: outputLayerX
-});
+//input: O=-1, -=0, X=1
+//output: where to move to; -1 is best move for O, 1 is best move for X. raster, ie 0=(0,0), 4=(1,1), etc.
 
-// train the network
-var learningRate = .3; //TODO tune this
+var myNetworkO = new Architect.Perceptron(9, 20, 9); //TODO train size of hidden layer
+var trainerO = new Trainer(myNetworkO);
+var trainingSetO = [];
+
+var myNetworkX = new Architect.Perceptron(9, 20, 9); //TODO train size of hidden layer
+var trainerX = new Trainer(myNetworkX);
+var trainingSetX = [];
+
 Object.keys(precalculated.patterns).forEach(function(key){
     let input = [];
     for (let i = 0; i < key.length; i++) {
@@ -77,13 +65,36 @@ Object.keys(precalculated.patterns).forEach(function(key){
         outputO[outputIndex] = cell.rewardO / totalRewardO;
     });
 
-    myNetworkO.activate(input);
-    myNetworkO.propagate(learningRate, outputO);
-    myNetworkX.activate(input);
-    myNetworkX.propagate(learningRate, outputX);
+    trainingSetO.push({
+        input: input,
+        output: outputO
+    });
+    trainingSetX.push({
+        input: input,
+        output: outputX
+    });
 });
 
-console.log("place to go: " + myNetworkO.activate([0,0,0,0,0,0,0,0,0])); //[0,0,0,0,1,0,0,0,0]
+trainerO.train(trainingSetO,{
+	rate: .1,
+	iterations: 20000,
+	error: .005,
+	shuffle: true,
+	log: 1000,
+	cost: Trainer.cost.CROSS_ENTROPY
+});
+
+trainerX.train(trainingSetX,{
+	rate: .1,
+	iterations: 20000,
+	error: .005,
+	shuffle: true,
+	log: 1000,
+	cost: Trainer.cost.CROSS_ENTROPY
+});
+
+
+console.log("place to go: " + myNetworkX.activate([0,0,0,0,0,0,0,0,0])); //expect: [0,0,0,0,1,0,0,0,0]
 console.log("did it learn?");
 
 
