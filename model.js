@@ -93,7 +93,7 @@ function resetEverything(){
     model.history = [];
 
     //a place to store pattern recognition memory
-    model.patternRecognition = {};
+    model.patterns = {};
 
     model.totalGames = 0;
     model.uniqueGames = {};
@@ -104,7 +104,7 @@ function resetEverything(){
     const learnFromScratch = new URL(window.location).searchParams.get("learnFromScratch")
     if(!learnFromScratch) {
         //a place to store pattern recognition memory
-        model.patternRecognition = precalculated.patternRecognition;
+        model.patterns = precalculated.patterns;
 
         model.totalGames = precalculated.totalGames;
         model.uniqueGames = precalculated.uniqueGames;

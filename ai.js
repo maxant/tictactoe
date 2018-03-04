@@ -3,18 +3,19 @@
 /** this is where the heavy lifting is done. */
 function doAiMove(player, rival){
 
-	if(model.useInstantWinLossChecks){ // || (model.playAutonomously.active && player === HUMAN)){ //train the AI against something a little more intelligent so it isnt learning to beat a monkey
+	if(model.useInstantWinLossChecks){
 	    if(doInstantWinMove(player, rival)) {
 	        return;
 	    }
 	}
 
     // ////////////////////////////////////////////////////
-    // No instant win, so use the strategy to get a win
+    // No instant win, so use the policy to get a win
     // ////////////////////////////////////////////////////
 
     model.currentPatternKnown = "Yes";
-    if(model.playAutonomously.active && player === HUMAN) {
+//TODO tidy this up
+    if(false && model.playAutonomously.active && player === HUMAN) {
         //use well known moves to try and win. see if we can teach the AI to use them
         if(playLikeAnt(player, rival)){
             return;
@@ -28,7 +29,7 @@ function doAiMove(player, rival){
         console.debug('pattern ' + pattern + ' known');
 
         // state, aka memory
-        let memory = model.patternRecognition[pattern];
+        let memory = model.patterns[pattern];
         if(memory){
 
             let explore = decideWhetherToExplore();
@@ -90,14 +91,12 @@ function decideWhetherToExplore() {
     if(model.useExploring.active) {
         let hi;
         if(model.totalUniqueGames > 2000){
-            hi = 100; //1%
-        }else if(model.totalUniqueGames > 1000){
             hi = 10; //10%
-        }else if(model.totalUniqueGames > 500){
+        }else if(model.totalUniqueGames > 1000){
             hi = 5; //20%
-        }else if(model.totalUniqueGames > 300){
+        }else if(model.totalUniqueGames > 500){
             hi = 3; //33%
-        }else if(model.totalUniqueGames > 200){
+        }else if(model.totalUniqueGames > 250){
             hi = 2; //50%
         }else{
             hi = 1; //always explore
@@ -362,12 +361,12 @@ function handleEnd(){
 			recreatedBoard[move.i][move.j].v = move.v;
 		}
         pattern = buildPattern(recreatedBoard);
-        memory = model.patternRecognition[pattern];
+        memory = model.patterns[pattern];
         if(!memory){
             memory = {
                 possibleNextMoves: []
             };
-            model.patternRecognition[pattern] = memory;
+            model.patterns[pattern] = memory;
         }
 
 
