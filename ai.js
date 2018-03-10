@@ -14,8 +14,8 @@ function doAiMove(player, rival){
     // ////////////////////////////////////////////////////
 
     model.currentPatternKnown = "Yes";
-//TODO tidy this up
-    if(false && model.playAutonomously.active && player === HUMAN) {
+//TODO train using ant moves?
+    if(model.playAutonomously.active && player === HUMAN) {
         //use well known moves to try and win. see if we can teach the AI to use them
         if(playLikeAnt(player, rival)){
             return;
@@ -90,13 +90,13 @@ function decideWhetherToExplore() {
     var explore = false;
     if(model.useExploring.active) {
         let hi;
-        if(model.totalUniqueGames > 2000){
+        if(model.totalUniqueGames > 3000){
             hi = 10; //10%
-        }else if(model.totalUniqueGames > 1000){
+        }else if(model.totalUniqueGames > 2000){
             hi = 5; //20%
-        }else if(model.totalUniqueGames > 500){
+        }else if(model.totalUniqueGames > 1000){
             hi = 3; //33%
-        }else if(model.totalUniqueGames > 250){
+        }else if(model.totalUniqueGames > 500){
             hi = 2; //50%
         }else{
             hi = 1; //always explore

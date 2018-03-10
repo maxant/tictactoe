@@ -4,11 +4,11 @@ const { Layer, Network, Trainer, Architect } = window.synaptic;
 //input: O=-1, -=0, X=1
 //output: where to move to; -1 is best move for O, 1 is best move for X. raster, ie 0=(0,0), 4=(1,1), etc.
 
-var myNetworkO = new Architect.Perceptron(9, 20, 9); //TODO train size of hidden layer
+var myNetworkO = new Architect.Perceptron(9, 30, 9); //TODO train size of hidden layer
 var trainerO = new Trainer(myNetworkO);
 var trainingSetO = [];
 
-var myNetworkX = new Architect.Perceptron(9, 20, 9); //TODO train size of hidden layer
+var myNetworkX = new Architect.Perceptron(9, 30, 9); //TODO train size of hidden layer
 var trainerX = new Trainer(myNetworkX);
 var trainingSetX = [];
 
@@ -50,51 +50,64 @@ Object.keys(precalculated.patterns).forEach(function(key){
         };
     });
 
-    let totalRewardX = 0;
-    let totalRewardO = 0;
-    rewards.forEach(function(cell){
-        totalRewardX += cell.rewardX;
-        totalRewardO += cell.rewardO;
-    });
+    if(rewards.length >= 1){
+        //TODO there could be several places to go with the same result. in that case, set several output elements to 1
+        //O
+        rewards.sort(function(a, b){
+            return a.rewardO < b.rewardO;
+        });
+        //the place with the highest reward is at index 0. set all other places to have output 0, and this place to have output 1.
+        let outputO = [0,0,0,0,0,0,0,0,0];
+        let outputIndex = rewards[0].i + (3*rewards[0].j);
+        outputO[outputIndex] = 1;
+        trainingSetO.push({
+            input: input,
+            output: outputO
+        });
 
-    let outputX = [];
-    let outputO = [];
-    rewards.forEach(function(cell){
-        let outputIndex = cell.i + (3*cell.j);
-        outputX[outputIndex] = cell.rewardX / totalRewardX;
-        outputO[outputIndex] = cell.rewardO / totalRewardO;
-    });
+        //X
+        rewards.sort(function(a, b){
+            return a.rewardX < b.rewardX;
+        });
+        //the place with the highest reward is at index 0. set all other places to have output 0, and this place to have output 1.
+        let outputX = [0,0,0,0,0,0,0,0,0];
+        outputIndex = rewards[0].i + (3*rewards[0].j);
+        outputX[outputIndex] = 1;
 
-    trainingSetO.push({
-        input: input,
-        output: outputO
-    });
-    trainingSetX.push({
-        input: input,
-        output: outputX
-    });
+        trainingSetX.push({
+            input: input,
+            output: outputX
+        });
+    } else {
+        console.warn("Strange, no places to go? " + key + " / " + value);
+    }
 });
 
-trainerO.train(trainingSetO,{
+var trainingResultO = trainerO.train(trainingSetO,{
+	rate: .01,
+//	iterations: 20000,
+	iterations: 1,
+	error: .005,
+	shuffle: true,
+	log: 100,
+	cost: Trainer.cost.MSE
+});
+console.log("training result O: " + JSON.stringify(trainingResultO));
+
+var trainingResultX = trainerX.train(trainingSetX,{
 	rate: .1,
-	iterations: 20000,
+//	iterations: 20000,
+	iterations: 1,
 	error: .005,
 	shuffle: true,
 	log: 1000,
 	cost: Trainer.cost.CROSS_ENTROPY
 });
-
-trainerX.train(trainingSetX,{
-	rate: .1,
-	iterations: 20000,
-	error: .005,
-	shuffle: true,
-	log: 1000,
-	cost: Trainer.cost.CROSS_ENTROPY
-});
+console.log("training result X: " + JSON.stringify(trainingResultX));
 
 
 console.log("place to go: " + myNetworkX.activate([0,0,0,0,0,0,0,0,0])); //expect: [0,0,0,0,1,0,0,0,0]
+console.log("place to go: " + myNetworkO.activate([0,0,0,0,1,0,0,0,0])); //expect: [1,0,0,0,0,0,0,0,0]
 console.log("did it learn?");
 
 
