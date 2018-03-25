@@ -114,7 +114,7 @@ function decideWhetherToExplore() {
 
 /** *******************************************************************************************************
  * placesToMove is effectively the action-value function Q(s, a) which gives the expected utility of a
- * given action a while in a given state s (https://en.wikipedia.org/wiki/Q-learning).
+ * given action 'a' while in a given state 's' (https://en.wikipedia.org/wiki/Q-learning).
  * so we can use it to find the best action based on previous rewards.
  * since we want to move to the place with the highest reward, we sort the values by reward.
  ******************************************************************************************************** */
@@ -392,6 +392,11 @@ function handleEnd(){
                     }
                 );
             }
+
+            // learning rate is 1, since, we simply add the reward to all previous rewards.
+            // might be able to make the algorithm learn quicker if we start to throw away
+            // earlier results, especially because they will have initially been based on
+            // random moves (exploration).
 			var reward = getReward(model.history.length);
             if(result === X) {
                 memory.possibleNextMoves[pnm].xWinRewards += reward;
@@ -400,6 +405,9 @@ function handleEnd(){
             }else{
                 memory.possibleNextMoves[pnm].drawRewards += reward;
             }
+
+            // discount rate... the current reward and all future rewards are weighted equally
+            // so the discount rate is 1.
         }
     }
 
