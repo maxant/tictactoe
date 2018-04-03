@@ -54,9 +54,9 @@ function checkFinished(board) {
     if(!winner){
         //check for a draw
         var allFull = true;
-        for(i = 0; i < model.board.length; i++){
-            for(j = 0; j < model.board[i].length; j++){
-                if(!model.board[i][j].v){
+        for(i = 0; i < board.length; i++){
+            for(j = 0; j < board[i].length; j++){
+                if(!board[i][j].v){
                     allFull = false;
                     break;
                 }

@@ -96,8 +96,8 @@ function resetEverything(){
     model.patterns = {};
 
     model.totalGames = 0;
-    model.uniqueGames = {};
-    model.totalUniqueGames = 0;
+    model.uniquePatterns = {};
+    model.totalUniquePatterns = 0;
     model.numExplorations = 0;
     model.numAiMoves = 0;
 
@@ -107,8 +107,8 @@ function resetEverything(){
         model.patterns = precalculated.patterns;
 
         model.totalGames = precalculated.totalGames;
-        model.uniqueGames = precalculated.uniqueGames;
-        model.totalUniqueGames = precalculated.totalUniqueGames;
+        model.uniquePatterns = precalculated.uniquePatterns;
+        model.totalUniquePatterns = precalculated.totalUniquePatterns;
         model.numExplorations = precalculated.numExplorations;
         model.numAiMoves = precalculated.numAiMoves;
     }
