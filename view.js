@@ -105,7 +105,7 @@ function render(){
         model.clear.x + 6, model.clear.y + 75);
     ctx.strokeText("Draws: " + model.stats.draws, model.clear.x + 6, model.clear.y + 90);
     ctx.strokeText("Total games played: " + model.totalGames, model.clear.x + 6, model.clear.y + 105);
-    ctx.strokeText("Unique patterns seen: " + model.totalUniquePatterns, model.clear.x + 6, model.clear.y + 120);
+    ctx.strokeText("Unique games seen: " + model.totalUniqueGames, model.clear.x + 6, model.clear.y + 120);
     ctx.strokeText("Number of explorations: " + model.numExplorations + "; chance of exploring: " + model.chanceOfExploring.toFixed(0) + "%; exploring enabled: " + model.useExploring.active, model.clear.x + 6, model.clear.y + 135);
     ctx.strokeText("Number of AI moves: " + model.numAiMoves, model.clear.x + 6, model.clear.y + 150);
     ctx.strokeText("Pattern known? " + model.currentPatternKnown, model.clear.x + 6, model.clear.y + 165);

@@ -22,11 +22,11 @@ function doAiMove(player, rival){
         }
     } else {
 
-        var move, possibleMove;
+        let move, possibleMove;
 
-        // have we seen this pattern? if so, and we had a winning solution, repeat it
-        var pattern = buildPattern(model.board);
-        console.debug('pattern ' + pattern + ' known');
+        // have we seen this pattern?
+        let pattern = buildPattern(model.board);
+        console.debug('pattern ' + pattern);
 
         // state, aka memory
         let memory = model.patterns[pattern];
@@ -53,7 +53,7 @@ function doAiMove(player, rival){
 
     model.currentPatternKnown = "No";
 
-    console.log("selecting cell randomly");
+    console.log("doing move randomly");
     moveRandomly(player);
 }
 
@@ -90,13 +90,13 @@ function decideWhetherToExplore() {
     var explore = false;
     if(model.useExploring.active) {
         let hi;
-        if(model.totalUniquePatterns > 3000){
+        if(model.totalUniqueGames > 3000){
             hi = 10; //10%
-        }else if(model.totalUniquePatterns > 2000){
+        }else if(model.totalUniqueGames > 2000){
             hi = 5; //20%
-        }else if(model.totalUniquePatterns > 1000){
+        }else if(model.totalUniqueGames > 1000){
             hi = 3; //33%
-        }else if(model.totalUniquePatterns > 500){
+        }else if(model.totalUniqueGames > 500){
             hi = 2; //50%
         }else{
             hi = 1; //always explore
@@ -351,13 +351,13 @@ function handleEnd(){
     var recreatedBoard = buildEmtpyBoard();
     var pattern = "";
     var memory, move;
-	var uniquePatternKey = "";
+	var uniqueGameKey = "";
     for(h = -1; h < model.history.length; h++){
 		if(h === -1){
 			//add an empty board at the start, so the AI works out where good starting moves are
 		}else{
 			move = model.history[h];
-			uniquePatternKey += move.i + "" + move.j + "" + move.v + "|";
+			uniqueGameKey += move.i + "" + move.j + "" + move.v + "|";
 			recreatedBoard[move.i][move.j].v = move.v;
 		}
         pattern = buildPattern(recreatedBoard);
@@ -419,18 +419,18 @@ function handleEnd(){
         model.stats.draws++;
     }
 
-	var ug = model.uniquePatterns[uniquePatternKey];
+	var ug = model.uniqueGames[uniqueGameKey];
 	if(!ug){
-		model.uniquePatterns[uniquePatternKey] = 0;
+		model.uniqueGames[uniqueGameKey] = 0;
 	}
-	model.uniquePatterns[uniquePatternKey] ++;
+	model.uniqueGames[uniqueGameKey] ++;
 
-	var totalUniquePatterns = 0;
-	for(key in model.uniquePatterns){
-		totalUniquePatterns++;
+	var totalUniqueGames = 0;
+	for(key in model.uniqueGames){
+		totalUniqueGames++;
 	}
-	console.log("Unique Patterns: " + totalUniquePatterns);
-	model.totalUniquePatterns = totalUniquePatterns;
+	console.log("Unique Games: " + totalUniqueGames);
+	model.totalUniqueGames = totalUniqueGames;
 }
 
 /**
