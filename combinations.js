@@ -1,4 +1,4 @@
-(function (){
+function init(){
     //based on https://en.wikipedia.org/wiki/Tic-tac-toe#Further_details
     //
     //     j=0 j=1 j=2
@@ -52,64 +52,88 @@
         centreDraws: 0,
         numStupidGames: 0
     };
-    for(var game = 123456789; game <= 999999999; game++){
-        let gameAsString = '' + game;
+    let forkStats = JSON.parse(JSON.stringify(stats));
+    let game = 123456789;
 
-        //can only accept games with unique combinations. cannot go in same place twice!
-        let isValidGame = true;
-        for(idx = 1; idx < 10; idx++) {
-            if(gameAsString.indexOf("" + idx) === -1 //only valid if every digit from 1-9 is found
-               || gameAsString.charAt(idx-1) === '0') //only 1-9 are valid
-            {
-                isValidGame = false;
+    run();
+
+    function run() {
+        for(var z = 0; z < 3000000; z++) {
+            if(game > 999999999){
                 break;
             }
-        }
 
-        if(isValidGame){
-            let board = buildEmtpyBoard();
-            let moves = '';
-            let isStupid = false;
-            for(idx = 0; idx < gameAsString.length; idx++){
-                let c = gameAsString[idx];
-                moves += c;
-                let coords = convertIndexToCoordinates(parseInt(c));
-                if(board[coords[0]][coords[1]].v) throw new Error("cell " + i + "," + j + " is already selected by " + board[coords[0]][coords[1]].v);
-                let player = idx % 2 === 0 ? X : O;
-                let rival = player === X ? O : X;
+            let gameAsString = '' + game;
 
-                //is this move a stupid one? then note that for later => we only want to know about the games with realistic moves
-                if(!isStupid && determineIfStupid(board, player, rival, coords[0], coords[1])){
-                    isStupid = true;
-                }
-
-                //move
-                board[coords[0]][coords[1]].v = player;
-
-                let winner = checkFinished(board);
-                if(winner){
-                    let o = uniqueGames[moves];
-
-                    if(!o){
-                        //it doesnt exist. update stats
-                        updateStats(gameAsString, winner, idx, stats, isStupid);
-                        uniqueGames[moves] = {};
-                    }
-
+            //can only accept games with unique combinations. cannot go in same place twice!
+            let isValidGame = true;
+            for(idx = 1; idx < 10; idx++) {
+                if(gameAsString.indexOf("" + idx) === -1 //only valid if every digit from 1-9 is found
+                   || gameAsString.charAt(idx-1) === '0') //only 1-9 are valid
+                {
+                    isValidGame = false;
                     break;
                 }
             }
+
+            if(isValidGame){
+                let board = buildEmtpyBoard();
+                let moves = '';
+                let isStupid = false;
+                let isWinningWithFork = false;
+                for(idx = 0; idx < gameAsString.length; idx++){
+                    let c = gameAsString[idx];
+                    moves += c;
+                    let coords = convertIndexToCoordinates(parseInt(c));
+                    if(board[coords[0]][coords[1]].v) throw new Error("cell " + i + "," + j + " is already selected by " + board[coords[0]][coords[1]].v);
+                    let player = idx % 2 === 0 ? X : O;
+                    let rival = player === X ? O : X;
+
+                    //is this move a stupid one? then note that for later => we only want to know about the games with realistic moves
+                    if(!isStupid && determineIfStupid(board, player, rival, coords[0], coords[1])){
+                        isStupid = true;
+                    }
+                    if(determineIfWinningWithFork(board, player, coords[0], coords[1])){
+                        isWinningWithFork = true;
+                    }
+
+                    //move
+                    board[coords[0]][coords[1]].v = player;
+
+                    let winner = checkFinished(board);
+                    if(winner){
+                        let o = uniqueGames[moves];
+
+                        if(!o){
+                            let relevantStats = stats;
+                            if(isWinningWithFork){
+                                relevantStats = forkStats;
+                            }
+
+                            //it doesnt exist. update stats
+                            updateStats(gameAsString, winner, idx, relevantStats, isStupid);
+                            uniqueGames[moves] = {};
+                        }
+
+                        break;
+                    }
+                }
+            }
+
+            game++;
         }
 
-        if(game % 1000000 === 0){
-            console.log("finished with game " + game + ", stats: " + JSON.stringify(stats));
+        let total = 0;
+        Object.keys(stats).forEach(function(e){ total += stats[e]; });
+        Object.keys(forkStats).forEach(function(e){ total += forkStats[e]; });
+        log("finished with game " + game + "<br>stats: " + JSON.stringify(stats, null, 4) + "<br>fork stats: " + JSON.stringify(forkStats, null, 4) + "<br>total number of unique games: " + total + "<br><br>" + (100*total/255168).toFixed(2) + "% done");
+
+        if(game <= 999999999){
+            setTimeout(run, 0);
+        }else{
+            console.log("done");
         }
     }
-
-    console.log("found these stats: " + JSON.stringify(stats));
-    let total = 0;
-    Object.keys(stats).forEach(function(e){ total += stats[e]; });
-    console.log("total number of unique games: " + total);
 
     function updateStats(gameAsString, winner, idx, stats, isStupid){
         if(isStupid){
@@ -242,5 +266,40 @@
         return false;
     }
 
+    //determines if a fork is available for the player and they are about to win
+    function determineIfWinningWithFork(board, player, nexti, nextj) {
+        // copy board
+        var copyOfBoard = buildEmtpyBoard();
+        for(i = 0; i < board.length; i++){
+            for(j = 0; j < board[i].length; j++){
+                copyOfBoard[i][j].v = board[i][j].v;
+            }
+        }
+        // attempt all places that are free
+        let numPlacesToWin = 0;
+        let isGoingToWin = false;
+        for(i = 0; i < board.length; i++){
+            for(j = 0; j < board[i].length; j++){
+                if(!copyOfBoard[i][j].v){
+                    copyOfBoard[i][j].v = player;
+                    if(checkFinished(copyOfBoard) === player){
+                        if(nexti === i && nextj === j){
+                            isGoingToWin = true;
+                        }
+                        numPlacesToWin++;
+                    }
 
-})();
+                    //reset and try next free cell
+                    delete copyOfBoard[i][j].v;
+                }
+            }
+        }
+
+        return isGoingToWin && numPlacesToWin > 1;
+    }
+
+
+    function log(msg){
+        document.getElementById("output").innerHTML = msg;
+    }
+}
