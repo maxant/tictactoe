@@ -130,11 +130,212 @@ function init(){
         Object.keys(stats).forEach(function(e){ total += stats[e]; });
         Object.keys(forkStats).forEach(function(e){ total += forkStats[e]; });
         Object.keys(stupidStats).forEach(function(e){ total += stupidStats[e]; });
-        log("finished with game " + (game-1) + "<br>stats: " + JSON.stringify(stats, null, 4) + "<br>fork stats: " + JSON.stringify(forkStats, null, 4)
-         + "<br>stupid stats: " + JSON.stringify(stupidStats, null, 4) + "<br>total number of unique games: " + total + "<br><br>" + (100*total/255168).toFixed(2) + "% done");
+        log("finished with game " + (game-1) + "<br>total number of unique games: " + total + "<br>" + (100*total/255168).toFixed(2) + "% done<br><br>stats: " + JSON.stringify(stats, null, 4) + "<br>fork stats: " + JSON.stringify(forkStats, null, 4)
+         + "<br>stupid stats: " + JSON.stringify(stupidStats, null, 4));
 
         if(game <= 999999999){
             setTimeout(run, 0);
+        }else{
+            let corners = stats.cornerXWins5 + stats.cornerXWins7 + stats.cornerXWins9;
+            corners += stupidStats.cornerXWins5 + stupidStats.cornerXWins7 + stupidStats.cornerXWins9;
+            corners += forkStats.cornerXWins5 + forkStats.cornerXWins7 + forkStats.cornerXWins9;
+            corners /= 4;
+            let edges = stats.sideXWins5 + stats.sideXWins7 + stats.sideXWins9;
+            edges += stupidStats.sideXWins5 + stupidStats.sideXWins7 + stupidStats.sideXWins9;
+            edges += forkStats.sideXWins5 + forkStats.sideXWins7 + forkStats.sideXWins9;
+            edges /= 4;
+            let center = stats.centreXWins5 + stats.centreXWins7 + stats.centreXWins9;
+            center += stupidStats.centreXWins5 + stupidStats.centreXWins7 + stupidStats.centreXWins9;
+            center += forkStats.centreXWins5 + forkStats.centreXWins7 + forkStats.centreXWins9;
+            let results = "Number of wins by first player, all games:<table border=1>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "<tr><td>" + edges + "</td><td>" + center + "</td><td>" + edges + "</td></tr>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "</table><hr>";
+
+            corners = stats.cornerOWins6 + stats.cornerOWins8;
+            corners += stupidStats.cornerOWins6 + stupidStats.cornerOWins8;
+            corners += forkStats.cornerOWins6 + forkStats.cornerOWins8;
+            corners /= 4;
+            edges = stats.sideOWins6 + stats.sideOWins8;
+            edges += stupidStats.sideOWins6 + stupidStats.sideOWins8;
+            edges += forkStats.sideOWins6 + forkStats.sideOWins8;
+            edges /= 4;
+            center = stats.centreOWins6 + stats.centreOWins8;
+            center += stupidStats.centreOWins6 + stupidStats.centreOWins8;
+            center += forkStats.centreOWins6 + forkStats.centreOWins8;
+            results += "Number of losses by first player, all games:<table border=1>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "<tr><td>" + edges + "</td><td>" + center + "</td><td>" + edges + "</td></tr>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "</table><hr>";
+
+            corners = stats.cornerDraws;
+            corners += stupidStats.cornerDraws;
+            corners += forkStats.cornerDraws;
+            corners /= 4;
+            edges = stats.sideDraws;
+            edges += stupidStats.sideDraws;
+            edges += forkStats.sideDraws;
+            edges /= 4;
+            center = stats.centreDraws;
+            center += stupidStats.centreDraws;
+            center += forkStats.centreDraws;
+            results += "Number of draws by first player, all games:<table border=1>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "<tr><td>" + edges + "</td><td>" + center + "</td><td>" + edges + "</td></tr>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "</table><hr>";
+
+
+
+            corners = stats.cornerXWins5 + stats.cornerXWins7 + stats.cornerXWins9;
+            corners += stupidStats.cornerXWins5 + stupidStats.cornerXWins7 + stupidStats.cornerXWins9;
+            corners += forkStats.cornerXWins5 + forkStats.cornerXWins7 + forkStats.cornerXWins9;
+            corners /= 4;
+            corners *= 100;
+            edges = stats.sideXWins5 + stats.sideXWins7 + stats.sideXWins9;
+            edges += stupidStats.sideXWins5 + stupidStats.sideXWins7 + stupidStats.sideXWins9;
+            edges += forkStats.sideXWins5 + forkStats.sideXWins7 + forkStats.sideXWins9;
+            edges /= 4;
+            edges *= 100;
+            center = stats.centreXWins5 + stats.centreXWins7 + stats.centreXWins9;
+            center += stupidStats.centreXWins5 + stupidStats.centreXWins7 + stupidStats.centreXWins9;
+            center += forkStats.centreXWins5 + forkStats.centreXWins7 + forkStats.centreXWins9;
+            center *= 100;
+
+            let corners2 = stats.cornerOWins6 + stats.cornerOWins8;
+            corners2 += stupidStats.cornerOWins6 + stupidStats.cornerOWins8;
+            corners2 += forkStats.cornerOWins6 + forkStats.cornerOWins8;
+            corners2 /= 4;
+            corners += -1 * corners2;
+            let edges2 = stats.sideOWins6 + stats.sideOWins8;
+            edges2 += stupidStats.sideOWins6 + stupidStats.sideOWins8;
+            edges2 += forkStats.sideOWins6 + forkStats.sideOWins8;
+            edges2 /= 4;
+            edges += -1 * edges2;
+            let center2 = stats.centreOWins6 + stats.centreOWins8;
+            center2 += stupidStats.centreOWins6 + stupidStats.centreOWins8;
+            center2 += forkStats.centreOWins6 + forkStats.centreOWins8;
+            center += -1 * center2;
+
+            corners2 = stats.cornerDraws;
+            corners2 += stupidStats.cornerDraws;
+            corners2 += forkStats.cornerDraws;
+            corners2 /= 4;
+            corners += 10 * corners2;
+            edges2 = stats.sideDraws;
+            edges2 += stupidStats.sideDraws;
+            edges2 += forkStats.sideDraws;
+            edges2 /= 4;
+            edges += 10 * edges2;
+            center2 = stats.centreDraws;
+            center2 += stupidStats.centreDraws;
+            center2 += forkStats.centreDraws;
+            center += 10 * center2;
+            results += "Number of points for first player, all games:<table border=1>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "<tr><td>" + edges + "</td><td>" + center + "</td><td>" + edges + "</td></tr>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "</table><hr>";
+
+
+
+            corners = stats.cornerXWins5 + stats.cornerXWins7 + stats.cornerXWins9;
+            corners += forkStats.cornerXWins5 + forkStats.cornerXWins7 + forkStats.cornerXWins9;
+            corners /= 4;
+            edges = stats.sideXWins5 + stats.sideXWins7 + stats.sideXWins9;
+            edges += forkStats.sideXWins5 + forkStats.sideXWins7 + forkStats.sideXWins9;
+            edges /= 4;
+            center = stats.centreXWins5 + stats.centreXWins7 + stats.centreXWins9;
+            center += forkStats.centreXWins5 + forkStats.centreXWins7 + forkStats.centreXWins9;
+            results += "Number of wins by first player, excluding stupid games:<table border=1>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "<tr><td>" + edges + "</td><td>" + center + "</td><td>" + edges + "</td></tr>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "</table><hr>";
+
+            corners = stats.cornerOWins6 + stats.cornerOWins8;
+            corners += forkStats.cornerOWins6 + forkStats.cornerOWins8;
+            corners /= 4;
+            edges = stats.sideOWins6 + stats.sideOWins8;
+            edges += forkStats.sideOWins6 + forkStats.sideOWins8;
+            edges /= 4;
+            center = stats.centreOWins6 + stats.centreOWins8;
+            center += forkStats.centreOWins6 + forkStats.centreOWins8;
+            results += "Number of losses by first player, excluding stupid games:<table border=1>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "<tr><td>" + edges + "</td><td>" + center + "</td><td>" + edges + "</td></tr>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "</table><hr>";
+
+            corners = stats.cornerDraws;
+            corners += forkStats.cornerDraws;
+            corners /= 4;
+            edges = stats.sideDraws;
+            edges += forkStats.sideDraws;
+            edges /= 4;
+            center = stats.centreDraws;
+            center += forkStats.centreDraws;
+            results += "Number of draws by first player, excluding stupid games:<table border=1>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "<tr><td>" + edges + "</td><td>" + center + "</td><td>" + edges + "</td></tr>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "</table><hr>";
+
+
+
+            corners = stats.cornerXWins5 + stats.cornerXWins7 + stats.cornerXWins9;
+            corners += stupidStats.cornerXWins5 + stupidStats.cornerXWins7 + stupidStats.cornerXWins9;
+            corners += forkStats.cornerXWins5 + forkStats.cornerXWins7 + forkStats.cornerXWins9;
+            corners /= 4;
+            corners *= 100;
+            edges = stats.sideXWins5 + stats.sideXWins7 + stats.sideXWins9;
+            edges += stupidStats.sideXWins5 + stupidStats.sideXWins7 + stupidStats.sideXWins9;
+            edges += forkStats.sideXWins5 + forkStats.sideXWins7 + forkStats.sideXWins9;
+            edges /= 4;
+            edges *= 100;
+            center = stats.centreXWins5 + stats.centreXWins7 + stats.centreXWins9;
+            center += stupidStats.centreXWins5 + stupidStats.centreXWins7 + stupidStats.centreXWins9;
+            center += forkStats.centreXWins5 + forkStats.centreXWins7 + forkStats.centreXWins9;
+            center *= 100;
+
+            corners2 = stats.cornerOWins6 + stats.cornerOWins8;
+            corners2 += stupidStats.cornerOWins6 + stupidStats.cornerOWins8;
+            corners2 += forkStats.cornerOWins6 + forkStats.cornerOWins8;
+            corners2 /= 4;
+            corners += -1 * corners2;
+            edges2 = stats.sideOWins6 + stats.sideOWins8;
+            edges2 += stupidStats.sideOWins6 + stupidStats.sideOWins8;
+            edges2 += forkStats.sideOWins6 + forkStats.sideOWins8;
+            edges2 /= 4;
+            edges += -1 * edges2;
+            center2 = stats.centreOWins6 + stats.centreOWins8;
+            center2 += stupidStats.centreOWins6 + stupidStats.centreOWins8;
+            center2 += forkStats.centreOWins6 + forkStats.centreOWins8;
+            center += -1 * center2;
+
+            corners2 = stats.cornerDraws;
+            corners2 += stupidStats.cornerDraws;
+            corners2 += forkStats.cornerDraws;
+            corners2 /= 4;
+            corners += 10 * corners2;
+            edges2 = stats.sideDraws;
+            edges2 += stupidStats.sideDraws;
+            edges2 += forkStats.sideDraws;
+            edges2 /= 4;
+            edges += 10 * edges2;
+            center2 = stats.centreDraws;
+            center2 += stupidStats.centreDraws;
+            center2 += forkStats.centreDraws;
+            center += 10 * center2;
+            results += "Number of points for first player, excluding stupid games:<table border=1>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "<tr><td>" + edges + "</td><td>" + center + "</td><td>" + edges + "</td></tr>";
+            results += "<tr><td>" + corners + "</td><td>" + edges + "</td><td>" + corners + "</td></tr>";
+            results += "</table><hr>";
+
+            document.getElementById("results").innerHTML = results;
         }
     }
 
