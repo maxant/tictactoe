@@ -49,10 +49,10 @@ function init(){
         centreXWins9: 0,
         cornerDraws: 0,
         sideDraws: 0,
-        centreDraws: 0,
-        numStupidGames: 0
+        centreDraws: 0
     };
     let forkStats = JSON.parse(JSON.stringify(stats));
+    let stupidStats = JSON.parse(JSON.stringify(stats));
     let game = 123456789;
 
     run();
@@ -65,27 +65,28 @@ function init(){
 
             let gameAsString = '' + game;
 
-            //can only accept games with unique combinations. cannot go in same place twice!
-            let isValidGame = true;
+            //can only accept unique combinations. no player can go any cell already used!
+            let isValidCombination = true;
             for(idx = 1; idx < 10; idx++) {
-                if(gameAsString.indexOf("" + idx) === -1 //only valid if every digit from 1-9 is found
+                if(gameAsString.indexOf('' + idx) === -1 //only valid if every digit from 1-9 is found
                    || gameAsString.charAt(idx-1) === '0') //only 1-9 are valid
                 {
-                    isValidGame = false;
+                    isValidCombination = false;
                     break;
                 }
             }
 
-            if(isValidGame){
+            if(isValidCombination){
                 let board = buildEmtpyBoard();
                 let moves = '';
                 let isStupid = false;
                 let isWinningWithFork = false;
                 for(idx = 0; idx < gameAsString.length; idx++){
                     let c = gameAsString[idx];
-                    moves += c;
-                    let coords = convertIndexToCoordinates(parseInt(c));
-                    if(board[coords[0]][coords[1]].v) throw new Error("cell " + i + "," + j + " is already selected by " + board[coords[0]][coords[1]].v);
+                    moves += c; //initially e.g. '1', then '12', etc.
+                    let coords = convertIndexToCoordinates(parseInt(c)); //turns e.g. '3' into [0,2]
+                    if(board[coords[0]][coords[1]].v)
+                        throw new Error("cell " + i + "," + j + " is already selected by " + board[coords[0]][coords[1]].v);
                     let player = idx % 2 === 0 ? X : O;
                     let rival = player === X ? O : X;
 
@@ -106,13 +107,15 @@ function init(){
 
                         if(!o){
                             let relevantStats = stats;
-                            if(isWinningWithFork){
+                            if(isStupid){
+                                relevantStats = stupidStats;
+                            } else if(isWinningWithFork){
                                 relevantStats = forkStats;
                             }
 
                             //it doesnt exist. update stats
-                            updateStats(gameAsString, winner, idx, relevantStats, isStupid);
-                            uniqueGames[moves] = {};
+                            updateStats(gameAsString, winner, idx, relevantStats);
+                            uniqueGames[moves] = {}; //record this game so it isn't harvested again
                         }
 
                         break;
@@ -126,74 +129,70 @@ function init(){
         let total = 0;
         Object.keys(stats).forEach(function(e){ total += stats[e]; });
         Object.keys(forkStats).forEach(function(e){ total += forkStats[e]; });
-        log("finished with game " + game + "<br>stats: " + JSON.stringify(stats, null, 4) + "<br>fork stats: " + JSON.stringify(forkStats, null, 4) + "<br>total number of unique games: " + total + "<br><br>" + (100*total/255168).toFixed(2) + "% done");
+        Object.keys(stupidStats).forEach(function(e){ total += stupidStats[e]; });
+        log("finished with game " + (game-1) + "<br>stats: " + JSON.stringify(stats, null, 4) + "<br>fork stats: " + JSON.stringify(forkStats, null, 4)
+         + "<br>stupid stats: " + JSON.stringify(stupidStats, null, 4) + "<br>total number of unique games: " + total + "<br><br>" + (100*total/255168).toFixed(2) + "% done");
 
         if(game <= 999999999){
             setTimeout(run, 0);
-        }else{
-            console.log("done");
         }
     }
 
-    function updateStats(gameAsString, winner, idx, stats, isStupid){
-        if(isStupid){
-            stats.numStupidGames++;
+    function updateStats(gameAsString, winner, idx, stats){
+        let coords = convertIndexToCoordinates(parseInt(gameAsString[0]));
+        if(coords[0] === 1 && coords[1] === 1){
+            if(winner === X){
+                if(idx+1 === 5){
+                    stats.centreXWins5++;
+                }else if(idx+1 === 7){
+                    stats.centreXWins7++;
+                }else if(idx+1 === 9){
+                    stats.centreXWins9++;
+                }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
+            }else if(winner === O){
+                if(idx+1 === 6){
+                    stats.centreOWins6++;
+                }else if(idx+1 === 8){
+                    stats.centreOWins8++;
+                }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
+            } else {
+                stats.centreDraws++;
+            }
+        } else if(coords[0] === 1 || coords[1] === 1){
+            if(winner === X){
+                if(idx+1 === 5){
+                    stats.sideXWins5++;
+                }else if(idx+1 === 7){
+                    stats.sideXWins7++;
+                }else if(idx+1 === 9){
+                    stats.sideXWins9++;
+                }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
+            }else if(winner === O){
+                if(idx+1 === 6){
+                    stats.sideOWins6++;
+                }else if(idx+1 === 8){
+                    stats.sideOWins8++;
+                }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
+            } else {
+                stats.sideDraws++;
+            }
         }else{
-            let coords = convertIndexToCoordinates(parseInt(gameAsString[0]));
-            if(coords[0] === 1 && coords[1] === 1){
-                if(winner === X){
-                    if(idx+1 === 5){
-                        stats.centreXWins5++;
-                    }else if(idx+1 === 7){
-                        stats.centreXWins7++;
-                    }else if(idx+1 === 9){
-                        stats.centreXWins9++;
-                    }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
-                }else if(winner === O){
-                    if(idx+1 === 6){
-                        stats.centreOWins6++;
-                    }else if(idx+1 === 8){
-                        stats.centreOWins8++;
-                    }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
-                } else {
-                    stats.centreDraws++;
-                }
-            } else if(coords[0] === 1 || coords[1] === 1){
-                if(winner === X){
-                    if(idx+1 === 5){
-                        stats.sideXWins5++;
-                    }else if(idx+1 === 7){
-                        stats.sideXWins7++;
-                    }else if(idx+1 === 9){
-                        stats.sideXWins9++;
-                    }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
-                }else if(winner === O){
-                    if(idx+1 === 6){
-                        stats.sideOWins6++;
-                    }else if(idx+1 === 8){
-                        stats.sideOWins8++;
-                    }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
-                } else {
-                    stats.sideDraws++;
-                }
-            }else{
-                if(winner === X){
-                    if(idx+1 === 5){
-                        stats.cornerXWins5++;
-                    }else if(idx+1 === 7){
-                        stats.cornerXWins7++;
-                    }else if(idx+1 === 9){
-                        stats.cornerXWins9++;
-                    }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
-                }else if(winner === O){
-                    if(idx+1 === 6){
-                        stats.cornerOWins6++;
-                    }else if(idx+1 === 8){
-                        stats.cornerOWins8++;
-                    }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
-                } else {
-                    stats.cornerDraws++;
-                }
+            if(winner === X){
+                if(idx+1 === 5){
+                    stats.cornerXWins5++;
+                }else if(idx+1 === 7){
+                    stats.cornerXWins7++;
+                }else if(idx+1 === 9){
+                    stats.cornerXWins9++;
+                }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
+            }else if(winner === O){
+                if(idx+1 === 6){
+                    stats.cornerOWins6++;
+                }else if(idx+1 === 8){
+                    stats.cornerOWins8++;
+                }else throw new Error("game :" + gameAsString + "/" + coords[0] + "," + coords[1] + "/" + winner + "/" + (idx+1));
+            } else {
+                stats.cornerDraws++;
             }
         }
     }
