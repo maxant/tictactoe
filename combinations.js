@@ -1,4 +1,5 @@
 function init(){
+    tests();
     //based on https://en.wikipedia.org/wiki/Tic-tac-toe#Further_details
     //
     //     j=0 j=1 j=2
@@ -94,7 +95,7 @@ function init(){
                     if(!isStupid && determineIfStupid(board, player, rival, coords[0], coords[1])){
                         isStupid = true;
                     }
-                    if(determineIfWinningWithFork(board, player, coords[0], coords[1])){
+                    if(!isStupid && determineIfWinningWithFork(board, player, coords[0], coords[1])){
                         isWinningWithFork = true;
                     }
 
@@ -111,6 +112,7 @@ function init(){
                                 relevantStats = stupidStats;
                             } else if(isWinningWithFork){
                                 relevantStats = forkStats;
+                                console.log("game with fork: " + gameAsString)
                             }
 
                             //it doesnt exist. update stats
@@ -502,4 +504,18 @@ function init(){
     function log(msg){
         document.getElementById("output").innerHTML = msg;
     }
+
+
+    function tests(){
+        //136842579 => should be stupid, but gets logged as fork!? should be noticed at 2
+        let b = buildEmtpyBoard();
+        b[0][0].v = X; //1
+        b[0][2].v = O; //3
+        b[1][2].v = X; //6
+        b[2][1].v = O; //8
+        b[1][0].v = X; //4
+        if(!determineIfStupid(b, X, 0, 1)) throw new Error();
+        //determineIfWinningWithFork(b, X, 0, 1);
+    }
 }
+
