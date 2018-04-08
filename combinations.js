@@ -112,12 +112,18 @@ function init(){
                                 relevantStats = stupidStats;
                             } else if(isWinningWithFork){
                                 relevantStats = forkStats;
-                                console.log("game with fork: " + gameAsString)
+                                //console.log("game with fork: " + gameAsString)
                             }
 
                             //it doesnt exist. update stats
                             updateStats(gameAsString, winner, idx, relevantStats);
-                            uniqueGames[moves] = {}; //record this game so it isn't harvested again
+                            uniqueGames[moves] = {
+                                winner: winner,
+                                numMoves: idx + 1,
+                                isStupid: isStupid,
+                                isWinningWithFork: isWinningWithFork,
+                                moves: moves
+                            }; //record this game so it isn't harvested again
                         }
 
                         break;
@@ -338,6 +344,47 @@ function init(){
             results += "</table><hr>";
 
             document.getElementById("results").innerHTML = results;
+
+            // lets analyse forks only to see where X should move to get the most number of chances of a fork
+            let firstMove = {};
+            let secondMove = {};
+
+            Object.keys(uniqueGames).forEach(function(moves){
+                let ug = uniqueGames[moves];
+                if(!ug.isStupid && ug.isWinningWithFork){
+                    let keyFirstMove = ug.moves[0];
+                    let fmg = firstMove[keyFirstMove];
+                    if(!fmg){
+                        fmg = {
+                            numXWinsFork: 0,
+                            numOWinsFork: 0
+                        };
+                        firstMove[keyFirstMove] = fmg;
+                    }
+
+                    let keySecondMove = ug.moves.substring(0, 2);
+                    let smg = secondMove[keySecondMove];
+                    if(!smg){
+                        smg = {
+                            numXWinsFork: 0,
+                            numOWinsFork: 0
+                        };
+                        secondMove[keySecondMove] = smg;
+                    }
+                    if(ug.winner === X){
+                        fmg.numXWinsFork++;
+                        smg.numXWinsFork++;
+                    }else if(ug.winner === O){
+                        fmg.numOWinsFork++;
+                        smg.numOWinsFork++;
+                    }else{
+                        throw new Error("B won with fork yet also draw?! " + ug.moves);
+                    }
+                }
+            });
+
+            document.getElementById("results").innerHTML += "done first move analysis: " + JSON.stringify(firstMove, null, 4) + "<hr>";
+            document.getElementById("results").innerHTML += "done second move analysis: " + JSON.stringify(secondMove, null, 4) + "<hr>";
         }
     }
 
