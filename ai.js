@@ -406,8 +406,8 @@ function handleEnd(){
                 memory.possibleNextMoves[pnm].drawRewards += reward;
             }
 
-            // discount rate... the current reward and all future rewards are weighted equally
-            // so the discount rate is 1.
+            // discount factor... the current reward and all future rewards are weighted equally
+            // so the discount factor is 1.
         }
     }
 
