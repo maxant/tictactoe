@@ -1,14 +1,3 @@
-
-// ant moves are what the author does to try and win, ie start in the middle
-var antMoves = {
-    "---|---|---|": {i: 1, j: 1},
-
-    "-O-|-X-|---|": {i: 1, j: 0},
-    "---|OX-|---|": {i: 0, j: 1},
-    "---|-XO|---|": {i: 0, j: 1},
-    "---|-X-|-O-|": {i: 1, j: 0},
-};
-
 /** returns DRAW if all squares are full with no winner, otherwise COMPUTER or HUMAN depending on who won. otherwise undefined. */
 function checkFinished(board) {
     var i, j, winner;
@@ -70,3 +59,58 @@ function checkFinished(board) {
     return winner;
 }
 
+/** used to determine if the algo is now intelligent */
+function hasLearnedEverything(){
+    return hasLearnedBestPlaceToStart()
+        && hasLearnedBestPlaceToCounter()
+    /* && TODO */;
+}
+
+function hasLearnedBestPlaceToStart(){
+    return knowsWhereToGo("---|---|---|", X, 1, 1);
+}
+
+function hasLearnedBestPlaceToCounter(){
+    return knowsWhereToGo("X--|---|---|", O, 1, 1)
+        && knowsWhereToGo("--X|---|---|", O, 1, 1)
+        && knowsWhereToGo("---|---|X--|", O, 1, 1)
+        && knowsWhereToGo("---|---|--X|", O, 1, 1)
+        && (knowsWhereToGo("---|-X-|---|", O, 0, 0)
+             || knowsWhereToGo("---|-X-|---|", O, 0, 2)
+             || knowsWhereToGo("---|-X-|---|", O, 2, 0)
+             || knowsWhereToGo("---|-X-|---|", O, 2, 2)
+           )
+    ;
+
+    //TODO other counters
+}
+
+function knowsWhereToGo(pattern, player, assertI, assertJ){
+    let memory = model.patterns[pattern];
+    if(memory){
+        let board = buildEmtpyBoard();
+        let rows = pattern.split("|");
+        for(i = 0; i < board.length; i++){
+            for(j = 0; j < board[i].length; j++){
+                if(rows[i].charAt(j) === X){
+                    board[i][j].v = X;
+                }else if(rows[i].charAt(j) === O){
+                    board[i][j].v = O;
+                }
+            }
+        }
+        let explore = false;
+        let placesToMove = determinePlacesToMove(explore, memory, player, board);
+        if(placesToMove.length){
+            placesToMove.sort(function(a, b){
+                return a.reward < b.reward;
+            });
+
+            if(placesToMove[0].i === assertI && placesToMove[0].j === assertJ){
+                return true;
+            }
+        }
+    }
+
+    return false;
+}

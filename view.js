@@ -8,11 +8,6 @@ function init(){
 
     buildModel();
 
-	// ////////////////////
-	// configuration
-	// ////////////////////
-	model.useInstantWinLossChecks = false; //if true, markedly improves intelligence quickly. but it is cooler to learn this on its own!
-
     test();
     clear();
     resetStats();

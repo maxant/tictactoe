@@ -3,53 +3,39 @@
 /** this is where the heavy lifting is done. */
 function doAiMove(player, rival){
 
-	if(model.useInstantWinLossChecks){
-	    if(doInstantWinMove(player, rival)) {
-	        return;
-	    }
-	}
-
     // ////////////////////////////////////////////////////
     // No instant win, so use the policy to get a win
     // ////////////////////////////////////////////////////
 
     model.currentPatternKnown = "Yes";
-//TODO train using ant moves?
-    if(false && model.playAutonomously.active && player === HUMAN) {
-        //use well known moves to try and win. see if we can teach the AI to use them
-        if(playLikeAnt(player, rival)){
-            return;
+
+    let move, possibleMove;
+
+    // have we seen this pattern?
+    let pattern = buildPattern(model.board);
+    console.debug('pattern ' + pattern);
+
+    // state, aka memory
+    let memory = model.patterns[pattern];
+    if(memory){
+
+        let explore = decideWhetherToExplore();
+
+        // determine Q i.e. a function based on state and actions
+        // placesToMove contains all possible actions and maps those actions to known rewards. the policy can
+        // use it to select the "best" move
+        let placesToMove = determinePlacesToMove(explore, memory, player, model.board);
+
+        // select based on policy
+        let placeToMove = getPlaceToMoveBasedOnPolicy(placesToMove, explore);
+
+        if(placeToMove.untried && !explore){
+            model.currentPatternKnown += "; never tried, better than losing";
         }
-    } else {
 
-        let move, possibleMove;
-
-        // have we seen this pattern?
-        let pattern = buildPattern(model.board);
-        console.debug('pattern ' + pattern);
-
-        // state, aka memory
-        let memory = model.patterns[pattern];
-        if(memory){
-
-            let explore = decideWhetherToExplore();
-
-            // determine Q i.e. a function based on state and actions
-            // placesToMove contains all possible actions and maps those actions to known rewards. the policy can
-            // use it to select the "best" move
-            let placesToMove = determinePlacesToMove(explore, memory, player);
-
-            // select based on policy
-            let placeToMove = getPlaceToMoveBasedOnPolicy(placesToMove, explore);
-
-            if(placeToMove.untried && !explore){
-                model.currentPatternKnown += "; never tried, better than losing";
-            }
-
-            selectCell(placeToMove.i, placeToMove.j, player);
-            return;
-        }
-	}
+        selectCell(placeToMove.i, placeToMove.j, player);
+        return;
+    }
 
     model.currentPatternKnown = "No";
 
@@ -118,10 +104,9 @@ function decideWhetherToExplore() {
  * so we can use it to find the best action based on previous rewards.
  * since we want to move to the place with the highest reward, we sort the values by reward.
  ******************************************************************************************************** */
-function determinePlacesToMove(explore, memory, player) {
+function determinePlacesToMove(explore, memory, player, board) {
 
-    var placesToMove = [];
-    var winRewards, drawRewards, lossRewards;
+    let placesToMove = [];
 
     //structure:
     //memory = {
@@ -136,24 +121,8 @@ function determinePlacesToMove(explore, memory, player) {
 
     for(pnm = 0; pnm < memory.possibleNextMoves.length; pnm++){
         possibleMove = memory.possibleNextMoves[pnm];
-        if(!model.board[possibleMove.i][possibleMove.j].v){
-            winRewards = player === X ? possibleMove.xWinRewards : possibleMove.oWinRewards;
-            drawRewards = possibleMove.drawRewards;
-            lossRewards = player === X ? possibleMove.oWinRewards : possibleMove.xWinRewards;
-
-            move = {
-                winRewards: winRewards,
-                drawRewards: drawRewards,
-                lossRewards: lossRewards,
-                i: possibleMove.i,
-                j: possibleMove.j,
-            };
-            //TODO how to tune this function?
-            var total = winRewards + drawRewards + lossRewards;
-
-            //divide by total, because otherwise it seems to learn that one place is GREAT and doesnt give other ones a chance.
-            //this way, we work out the win ratio regardless of how often its been played. so its normalised in comparison to the others.
-            move.reward = (100*(winRewards/total)) + (10*(drawRewards/total)) + (-1*(lossRewards/total));
+        if(!board[possibleMove.i][possibleMove.j].v){
+            let move = buildMoveWithRewards(possibleMove, player);
 
             placesToMove.push(move);
 
@@ -172,9 +141,9 @@ function determinePlacesToMove(explore, memory, player) {
     }
 
     //finally add unknown places with a reward of 0, since its unknown. better to go there than a place which is known to lose.
-    for(i = 0; i < model.board.length; i++){
-        for(j = 0; j < model.board[i].length; j++){
-            if(!model.board[i][j].v){
+    for(i = 0; i < board.length; i++){
+        for(j = 0; j < board[i].length; j++){
+            if(!board[i][j].v){
                 var found = false;
                 for(pnm = 0; pnm < placesToMove.length; pnm++){
                     if(placesToMove[pnm].i === i &&
@@ -185,15 +154,13 @@ function determinePlacesToMove(explore, memory, player) {
                    }
                 }
                 if(!found){
-                    placesToMove.push({
-                        untried: true,
-                        winRewards: 0,
-                        drawRewards: 0,
-                        lossRewards: 0,
-                        i: i,
-                        j: j,
-                        reward: 0
-                    });
+
+                    let move = buildMove(0, 0, 0, i, j);
+                    move.untried = true;
+                    move.reward = 0;
+
+                    placesToMove.push(move);
+
                     console.debug('found unknown place to move: ' + JSON.stringify(placesToMove[placesToMove.length-1]));
                 }
             }
@@ -202,69 +169,34 @@ function determinePlacesToMove(explore, memory, player) {
     return placesToMove;
 }
 
+function buildMoveWithRewards(possibleMove, player) {
+    let winRewards = player === X ? possibleMove.xWinRewards : possibleMove.oWinRewards;
+    let drawRewards = possibleMove.drawRewards;
+    let lossRewards = player === X ? possibleMove.oWinRewards : possibleMove.xWinRewards;
 
+    let move = buildMove(winRewards, drawRewards, lossRewards, possibleMove.i, possibleMove.j);
 
-function doInstantWinMove(player, rival) {
-    // ////////////////////////////
-    // search for an instant win
-    // ////////////////////////////
-    // copy board
-    var copyOfBoard = buildEmtpyBoard();
-    for(i = 0; i < model.board.length; i++){
-        for(j = 0; j < model.board[i].length; j++){
-            copyOfBoard[i][j].v = model.board[i][j].v;
-        }
-    }
-    // attempt all places that are free
-    for(i = 0; i < model.board.length; i++){
-        for(j = 0; j < model.board[i].length; j++){
-            if(!copyOfBoard[i][j].v){
-                copyOfBoard[i][j].v = player;
-                if(checkFinished(copyOfBoard) === player){
-                    console.log("found instant win at " + i + "," + j);
-                    selectCell(i, j, player);
-                    model.currentPatternKnown = "No, but found an instant win";
-                    return true;
-                }else{
-                    //reset and try next free cell
-                    delete copyOfBoard[i][j].v;
-                }
-            }
-        }
-    }
+    //TODO how to tune this function?
+    var total = winRewards + drawRewards + lossRewards;
 
-    // ////////////////////////////
-    // avoid instant loss
-    // ////////////////////////////
-    for(i = 0; i < model.board.length; i++){
-        for(j = 0; j < model.board[i].length; j++){
-            if(!copyOfBoard[i][j].v){
-                copyOfBoard[i][j].v = rival;
-                if(checkFinished(copyOfBoard) === rival){
-                    console.log("found instant lose at " + i + "," + j);
-                    selectCell(i, j, player);
-                    model.currentPatternKnown = "No, but avoiding loss";
-                    return true;
-                }else{
-                    //reset and try next free cell
-                    delete copyOfBoard[i][j].v;
-                }
-            }
-        }
-    }
-    return false;
+    //divide by total, because otherwise it seems to learn that one place is GREAT and doesnt give other ones a chance.
+    //this way, we work out the win ratio regardless of how often its been played. so its normalised in comparison to the others.
+    move.reward = (100*(winRewards/total)) + (10*(drawRewards/total)) + (-1*(lossRewards/total));
+
+    return move;
 }
 
-function playLikeAnt(player, rival) {
-    var pattern = buildPattern(model.board);
-    var move = antMoves[pattern];
-    if(move) {
-        model.currentPatternKnown = "Yes, moving like Ant";
-        selectCell(move.i, move.j, player);
-        return true;
-    } else {
-        return doInstantWinMove(player, rival);
-    }
+function buildMove(winRewards, drawRewards, lossRewards, i, j) {
+
+    let move = {
+        winRewards: winRewards,
+        drawRewards: drawRewards,
+        lossRewards: lossRewards,
+        i: i,
+        j: j
+    };
+
+    return move;
 }
 
 function buildPattern(board) {

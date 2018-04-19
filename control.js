@@ -45,7 +45,7 @@ function autoPlay(){
     if(isFinished() && model.totalGames % 100 === 0) { //switch every 100 games, so learning is balanced for both players
         toggleWhoPlaysWhat();
     }
-    if(model.isLearning && isFinished() && model.totalGames >= 50000){
+    if(model.isLearning && isFinished() && (model.totalGames >= 50000 || hasLearnedEverything())){
         model.isLearning = false;
         toggleAuto();
         if(COMPUTER === O){
